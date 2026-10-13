@@ -4,16 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "start": "next start",
+    "lint": "eslint",
     "postinstall": "prisma generate",
     "build": "prisma generate && next build",
     "test": "dotenv -e .env.test -- vitest run",
     "test:watch": "dotenv -e .env.test -- vitest",
     "db:migrate:test": "dotenv -e .env.test -- prisma migrate deploy"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
-  
   "dependencies": {
     "@prisma/client": "6",
     "bcryptjs": "^3.0.3",
