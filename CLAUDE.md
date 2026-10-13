@@ -2,39 +2,86 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project
+
+ApparelFlow ERP: Cutting Gatekeeper. Webtezza (Pvt) Ltd Software Engineering Intern practical assessment (4 days). We are building and deploying the **Cutting Operations & Gatekeeper Verification Terminal**: a full-stack app where no cutting batch can reach the Sewing Queue unless a Cutting Verifier has counted every component and signed off. The hard stop is enforced **server-side and in PostgreSQL**, never only in the UI.
+
 ## Status
 
-Early scaffold: the app is still the unmodified `create-next-app` starter (`src/app/page.tsx`, `layout.tsx`) with Prisma wired up but no models, routes, or tests yet. Dependencies (`bcryptjs`, `jose`, `zod`, `@prisma/client`) point to a planned auth + database app, but none of it is implemented — don't assume it exists.
+Early scaffold: the app is still the unmodified `create-next-app` starter (`src/app/page.tsx`, `layout.tsx`) with Prisma wired up but no models, routes, or tests yet. Dependencies (`bcryptjs`, `jose`, `zod`, `@prisma/client`) point to a planned auth + database app, but none of it is implemented. Don't assume it exists. **Update this section as each milestone lands** (Day 1 DB and deploy, Day 2 orders and auth, Day 3 verifier and hard stop, Day 4 sewing, tests, docs).
+
+## Source of truth (highest first)
+
+1. The challenge brief: `docs/challenge-brief.pdf`
+2. `docs/DECISIONS.md` (settled decisions, imported below)
+3. `docs/GAPS_AND_STARTUP_GUIDE.md` (known gaps, trigger SQL, day plan; read when working on DB triggers, auth or planning)
+4. `prisma/schema.prisma` and the raw SQL migrations
+
+If a request conflicts with a higher source, say so explicitly and ask which wins. Never silently pick one, and never invent requirements that contradict the brief.
+
+@docs/DECISIONS.md
 
 ## Next.js version caveat
 
-`AGENTS.md` warns that this Next.js (16.x, React 19.3) has breaking changes from what you may know. Before writing Next.js code, read the relevant guide under `node_modules/next/dist/docs/01-app/` (e.g. the Cache Components, prefetching, and authentication guides). Heed deprecation notices. Note `layout.tsx` already uses the global `LayoutProps<"/">` type helper rather than hand-written prop types.
+`AGENTS.md` warns that this Next.js (16.x, React 19.3) has breaking changes from what you may know. Before writing Next.js code, read the relevant guide under `node_modules/next/dist/docs/01-app/` (e.g. the Cache Components, route handlers, prefetching, and authentication guides). Heed deprecation notices. Note `layout.tsx` already uses the global `LayoutProps<"/">` type helper rather than hand-written prop types.
 
-`next.config.ts` enables `cacheComponents` and `partialPrefetching`, and routes `*.css` through `@tailwindcss/turbopack` (Tailwind v4, imported via `@import "tailwindcss"` in `globals.css`; no `tailwind.config`). Cache Components changes how dynamic data access and caching behave in the App Router, so check the docs before fetching data or reading request APIs.
+`next.config.ts` enables `cacheComponents` and `partialPrefetching`, and routes `*.css` through `@tailwindcss/turbopack` (Tailwind v4, imported via `@import "tailwindcss"` in `globals.css`; no `tailwind.config`). Cache Components changes how dynamic data access and caching behave in the App Router, so check the docs before fetching data, reading request APIs (cookies, headers, params) or writing route handlers. Anything per-user (session, orders, queue) must be dynamic and never cached or shared between users. In this Next version `middleware` has become `proxy`; neither is a security boundary (see rules).
 
 ## Commands
 
+Package manager is **yarn**. Both `yarn.lock` and `package-lock.json` exist; never run `npm install`, and remove `package-lock.json` in its own commit so the lockfiles cannot diverge.
+
 ```bash
-yarn dev          # next dev
-yarn build        # next build
-yarn start        # next start
-yarn lint         # eslint (flat config: next core-web-vitals + typescript)
-npx tsc --noEmit  # type-check (no script defined)
-npx prisma generate        # regenerate the client into src/generated/prisma
-npx prisma migrate dev     # create/apply migrations (uses DIRECT_URL-style session connection, see below)
+yarn dev                        # next dev
+yarn build                      # next build
+yarn start                      # next start
+yarn lint                       # eslint (flat config: next core-web-vitals + typescript)
+yarn tsc --noEmit               # type-check (no script defined yet)
+yarn prisma validate            # must pass before every push
+yarn prisma generate            # regenerate the client into src/generated/prisma
+yarn prisma migrate dev --name <change>
+yarn prisma migrate dev --create-only --name <change>   # raw SQL migrations (triggers, CHECKs, RLS)
+yarn prisma db seed
 ```
 
-`vitest` and `vite-tsconfig-paths` are installed as devDependencies, but there is no vitest config, no `test` script, and no test files yet. Single test (once added): `npx vitest run path/to/file.test.ts`.
+`vitest` and `vite-tsconfig-paths` are installed, but there is no vitest config, no `test` script and no test files yet. Planned: a `test` script that loads `.env.test` (separate local Postgres, never Supabase) and runs `vitest run`; a single file: `yarn vitest run path/to/file.test.ts`. See `.claude/rules/testing.md`.
 
-Both `yarn.lock` and `package-lock.json` exist; the repo was last installed with yarn, so use yarn and keep the lockfiles from diverging.
+Never run `prisma migrate reset` or `prisma db push` (they wipe data or bypass migrations and triggers). Never read or print `.env*` files.
 
-## Database (Prisma 6 + PostgreSQL)
+## Database (Prisma 6 + PostgreSQL on Supabase)
 
-- `prisma/schema.prisma` uses the `prisma-client` generator with output `src/generated/prisma` (git-ignored). Import the client from there (`@/generated/prisma/...`), not from `@prisma/client`, and run `prisma generate` after cloning or changing the schema.
+- `prisma/schema.prisma` uses the `prisma-client` generator with output `src/generated/prisma` (git-ignored). **Import the client and types from `@/generated/prisma/...`, not from `@prisma/client`**, and run `prisma generate` after cloning or changing the schema.
 - `prisma.config.ts` loads `.env` via `dotenv/config` and reads `DATABASE_URL`. It sets `engine: "classic"`, and migrations go in `prisma/migrations`.
-- `.env.example` documents two connection strings: `DATABASE_URL` (transaction-mode pooler, for runtime) and `DIRECT_URL` (session-mode pooler, for migrations). Only `DATABASE_URL` is currently referenced by the schema and config; `DIRECT_URL` is not wired in. The file also has no `=` after the variable names, so fill in real values in `.env` (git-ignored) rather than copying it as-is.
+- `.env.example` documents two connection strings: `DATABASE_URL` (transaction-mode pooler, for runtime) and `DIRECT_URL` (session-mode pooler, for migrations). Only `DATABASE_URL` is currently referenced; **`DIRECT_URL` is not wired in yet**. Migrations must not run through the transaction pooler. Wiring it is a Day 1 task: read the installed Prisma docs to see how `prisma.config.ts` and the schema datasource interact in this version, then verify with `yarn prisma validate`. Do not guess.
+- `.env.example` has no `=` after the variable names; fill real values into `.env` (git-ignored) rather than copying it as-is.
+- Keep the existing generator and datasource blocks. Add the project's enums and models (see `docs/DECISIONS.md` and `docs/GAPS_AND_STARTUP_GUIDE.md`) without replacing them.
+- Constraints Prisma cannot express (CHECKs, triggers, views, row level security) live in raw SQL migrations. Details: `.claude/rules/database.md`.
 
 ## Conventions
 
-- Path alias `@/*` → `src/*`.
-- TypeScript is `strict`; the App Router lives in `src/app`.
+- Path alias `@/*` maps to `src/*`. TypeScript is `strict`; the App Router lives in `src/app`.
+- Domain logic (component multiplier, traffic-light status, wastage %) lives in **pure functions** under `src/lib/domain/`, unit-tested without a DB. Zod schemas in `src/lib/validation/`. Auth helpers (`requireRole`) in `src/lib/auth.ts`.
+- API routes under `src/app/api/` (auth, orders, verification, sewing); tests under `tests/` (domain, api, db-triggers).
+
+## Non-negotiable invariants (details in `.claude/rules/gatekeeper-invariants.md`)
+
+- Any RED, missing or uncounted component means approval fails with **422** on the API and in the DB.
+- Only `cutting_verifier` can approve or reject. Wrong role gets **403**.
+- Only `VERIFIED` orders appear in the Sewing Queue, via a literal `WHERE status = 'VERIFIED'`.
+- Verifier id, timestamps, item status and wastage % come from the server, never the request body.
+- The audit trail is append-only. Never weaken an invariant to make a test pass; fix the cause.
+
+## How to work here
+
+- **Ask before building anything ambiguous.** Ask short, precise clarifying questions rather than brainstorming several designs. Do not ask when the answer is in the source-of-truth files.
+- **Act as an experienced tech lead.** Push back on risky or underspecified requests. For every non-trivial change, state edge cases, abuse vectors (Postman/cURL bypass), race conditions and anything that could corrupt historical audit data. Note briefly whether a change is additive for future needs; do not over-build.
+- **Small, atomic changes** matching the 4-day plan. One concern per commit, imperative messages (e.g. `Add refresh token rotation with reuse detection`). Evaluators read the git history. Keep the default Claude co-author line on commits.
+- **Status transitions always get both paths:** the happy path and the rejection/hard-stop path, with tests.
+- **Log every AI mistake you or the user catch** with the `/log-ai-mistake` skill, as it happens. `AI_OPTIMIZATION_REPORT.md` is a graded deliverable and needs at least 2 real, specific, honest examples. Never invent entries.
+- **No scope creep:** no extra modules, no recipe-editing UI, nothing the brief doesn't ask for.
+- Before finishing a task run `yarn lint`, `yarn prisma validate` and the tests (once they exist). Say plainly if anything wasn't run or failed.
+- Use the `gatekeeper-reviewer` subagent before committing any change that touches auth, verification, status transitions, the sewing queue, migrations or triggers. Use `ui-contrast-auditor` after UI changes.
+
+## Deliverables checklist (all mandatory)
+
+Live Vercel URL; public GitHub repo with atomic commits; `AI_OPTIMIZATION_REPORT.md` (4 sections: tools and prompting, flawed AI code with at least 2 instances, human refactoring, defensive architecture); `README.md` (architecture, schema, demo credentials for all 3 roles, plus the documented interpretations: flag-only wastage cap, decimal fabric yards, `CUTTING_IN_PROGRESS` unused); passing automated tests.
