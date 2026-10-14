@@ -45,6 +45,3 @@ next-env.d.ts
 
 # claude local settings
 /.claude/settings.local.json
-docs
-# local notes for the AI optimisation report, not committed
-AI_NOTES.md
