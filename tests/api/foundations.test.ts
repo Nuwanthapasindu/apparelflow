@@ -189,6 +189,10 @@ describe("database error mapping", () => {
   it("reads the SQLSTATE from raw-query errors in both shapes", () => {
     expect(sqlStateOf({ code: "P2010", meta: { code: "GK409" } })).toBe("GK409");
     expect(sqlStateOf({ message: "Raw query failed. Code: `GK422`. Message: `x`" })).toBe("GK422");
+    // The typed client reports trigger errors as PrismaClientUnknownRequestError with this text.
+    const typed = 'Error occurred during query execution:\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(PostgresError { code: "GK403", message: "created_by must be an active cutting_supervisor", severity: "ERROR" }) })';
+    expect(sqlStateOf({ message: typed })).toBe("GK403");
+    expect(mapDbError({ message: typed })).toMatchObject({ status: 403 });
     expect(sqlStateOf({ meta: { code: "not-a-state" } })).toBeUndefined();
     expect(sqlStateOf(null)).toBeUndefined();
     expect(sqlStateOf(new Error("boom"))).toBeUndefined();

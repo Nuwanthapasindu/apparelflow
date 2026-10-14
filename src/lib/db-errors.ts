@@ -9,9 +9,10 @@ const SQLSTATE = /^[0-9A-Z]{5}$/;
 export function sqlStateOf(error: unknown): string | undefined {
   const e = error as { code?: unknown; meta?: { code?: unknown }; message?: unknown } | null | undefined;
   if (typeof e?.meta?.code === "string" && SQLSTATE.test(e.meta.code)) return e.meta.code;
-  // Raw queries surface it as "Raw query failed. Code: `GK409`. Message: ..."
   if (typeof e?.message === "string") {
-    const match = /Code: `([0-9A-Z]{5})`/.exec(e.message);
+    // Raw queries: "Raw query failed. Code: `GK409`. Message: ..."
+    // Typed client (PrismaClientUnknownRequestError): "... PostgresError { code: \"GK409\", message: ..."
+    const match = /Code: `([0-9A-Z]{5})`/.exec(e.message) ?? /PostgresError \{ code: "([0-9A-Z]{5})"/.exec(e.message);
     if (match) return match[1];
   }
   return undefined;
