@@ -1,9 +1,7 @@
-import bcrypt from "bcryptjs";
 import { PrismaClient, Role } from "../src/generated/prisma/client";
+import { hashPassword } from "../src/lib/auth/password-hash";
 
 const prisma = new PrismaClient();
-
-const BCRYPT_COST = 10;
 
 const recipes = [
   {
@@ -78,11 +76,13 @@ async function main() {
   }
 
   for (const { password, ...user } of users) {
-    // The hash is only written on create, so re-running the seed keeps existing logins stable.
+    // The hash is rewritten on every run on purpose: it makes re-running the seed repair the demo
+    // accounts (for example after the hashing algorithm changed) without creating duplicates.
+    const passwordHash = await hashPassword(password);
     await prisma.user.upsert({
       where: { email: user.email },
-      update: { role: user.role, fullName: user.fullName, isActive: true },
-      create: { ...user, passwordHash: await bcrypt.hash(password, BCRYPT_COST) },
+      update: { role: user.role, fullName: user.fullName, isActive: true, passwordHash },
+      create: { ...user, passwordHash },
     });
   }
 

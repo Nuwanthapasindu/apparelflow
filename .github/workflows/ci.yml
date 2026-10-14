@@ -60,7 +60,7 @@ jobs:
           cat > .env.test <<'ENV'
           DATABASE_URL="postgresql://postgres:test@localhost:5432/apparelflow_test"
           DIRECT_URL="postgresql://postgres:test@localhost:5432/apparelflow_test"
-          JWT_SECRET="test-secret"
+          JWT_SECRET="ci-only-throwaway-secret-0123456789abcdef"
           ENV
 
       - name: Lint

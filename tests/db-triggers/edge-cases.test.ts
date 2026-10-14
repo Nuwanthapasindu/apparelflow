@@ -85,13 +85,18 @@ describe("edge cases: duplicates and invalid values", () => {
     await expectDbError(sql(`UPDATE users SET role='admin' WHERE id='u_sup'`), "22P02");
   });
 
-  it("a non-positive expected_qty is rejected", async () => {
+  it("a non-positive expected_qty is rejected by the item guard (GK422) and, behind it, by the CHECK (23514)", async () => {
     await createOrder("o1");
     await sql(`DELETE FROM verification_items WHERE component_id='c1'`);
-    await expectDbError(
-      sql(`INSERT INTO verification_items(id,order_id,component_id,attempt_no,component_name,expected_qty) VALUES ('z','o1','c1',1,'Front Body',0)`),
-      "23514",
-    );
+    const insert = `INSERT INTO verification_items(id,order_id,component_id,attempt_no,component_name,expected_qty) VALUES ('z','o1','c1',1,'Front Body',0)`;
+    await expectDbError(sql(insert), "GK422");
+    // BEFORE triggers run ahead of CHECKs, so switch the guard off to prove the CHECK holds on its own.
+    await sql(`ALTER TABLE verification_items DISABLE TRIGGER trg_item_guard`);
+    try {
+      await expectDbError(sql(insert), "23514");
+    } finally {
+      await sql(`ALTER TABLE verification_items ENABLE TRIGGER trg_item_guard`);
+    }
   });
 });
 
@@ -141,7 +146,8 @@ describe("security: evidence cannot be reused or borrowed", () => {
     const before = await prisma.cuttingOrder.findUniqueOrThrow({ where: { id: "o1" } });
     await prisma.user.create({ data: { id: "u_sew2", email: "w2@x", passwordHash: "h", role: "sewing_supervisor", fullName: "Sew2" } });
     await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_by='u_sew2' WHERE id='o1'`), "GK409");
-    await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_at=now() WHERE id='o1'`), "GK409");
+    // Always a different value: `now()` could coincide with the stored millisecond when the DB and host clocks are close, which would make this a no-op the trigger rightly allows.
+    await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_at = sewing_started_at + interval '1 second' WHERE id='o1'`), "GK409");
     await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_by=NULL, sewing_started_at=NULL WHERE id='o1'`), "GK409");
     await expectDbError(
       sql(`UPDATE cutting_orders SET status='IN_SEWING', sewing_started_by='u_sew2', sewing_started_at=now() WHERE id='o1'`),

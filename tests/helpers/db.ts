@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { PrismaClient } from "@/generated/prisma/client";
+import { sqlStateOf } from "@/lib/db-errors";
 import { assertTestDatabase } from "./assert-test-database";
 
 assertTestDatabase();
@@ -155,11 +156,6 @@ export async function orderInState(id: string, state: "PENDING" | "REJECTED" | "
 
 export const sql = (statement: string) => prisma.$executeRawUnsafe(statement);
 
-function sqlState(error: unknown): string | undefined {
-  const e = error as { meta?: { code?: string }; message?: string } | undefined;
-  return e?.meta?.code ?? /Code: `([^`]+)`/.exec(e?.message ?? "")?.[1];
-}
-
 /** The statement must fail with exactly this SQLSTATE (GK403/GK409/GK422, 23514, 23505, P0001, ...). */
 export async function expectDbError(statement: PromiseLike<unknown>, code: string) {
   const error = await Promise.resolve(statement).then(
@@ -167,5 +163,5 @@ export async function expectDbError(statement: PromiseLike<unknown>, code: strin
     (e: unknown) => e ?? new Error("rejected without a reason"),
   );
   expect(error, "statement should have been rejected by the database").toBeDefined();
-  expect(sqlState(error)).toBe(code);
+  expect(sqlStateOf(error)).toBe(code);
 }
