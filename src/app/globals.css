@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Light theme only. There is deliberately no prefers-color-scheme: dark block: a dark OS theme
+ * turns native inputs and dropdown lists white-on-white, which is the defect class we must avoid.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #f1f5f9; /* slate-100 */
+  --foreground: #0f172a; /* slate-900 */
 }
 
 @theme inline {
@@ -12,15 +17,155 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  /*
+   * Every text control gets explicit colours, never inherited ones:
+   * text slate-900 on white (17:1), border slate-500 (4.8:1, above the 3:1 UI-component rule),
+   * placeholder slate-500 (4.8:1 on white).
+   */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #64748b;
+    border-radius: 0.5rem;
+    background-color: #ffffff;
+    color: #0f172a;
+    font: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+
+  option {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  /* Visible on every focusable thing: 2px blue-700 with an offset. */
+  :focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+
+  /*
+   * Chrome and Safari do not match :focus-visible on a <select> (or a field focused by script)
+   * after a mouse or touch interaction, which would leave a clicked dropdown with no ring at all.
+   */
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    background-color: #f1f5f9;
+    color: #475569;
+    cursor: not-allowed;
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    border-color: #b91c1c;
+    border-width: 2px;
+  }
+
+  /* Browser autofill paints its own pale background and sometimes white text. Keep it dark on light. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  textarea:-webkit-autofill,
+  input:autofill {
+    -webkit-text-fill-color: #0f172a;
+    caret-color: #0f172a;
+    box-shadow: 0 0 0 1000px #ffffff inset;
+    transition: background-color 9999s ease-out 0s;
+  }
+
+  a {
+    color: #1d4ed8;
+    text-underline-offset: 2px;
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    line-height: 1.25;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    background-color: #e2e8f0;
+    border-color: #94a3b8;
+    color: #475569;
+  }
+  .btn-primary {
+    background-color: #1d4ed8; /* blue-700: 6.7:1 against white text */
+    color: #ffffff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #1e40af;
+  }
+  .btn-secondary {
+    background-color: #ffffff;
+    border-color: #475569;
+    color: #0f172a;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #f1f5f9;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .field-hint {
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: #334155; /* slate-700 */
+  }
+  .field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.375rem;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #991b1b; /* red-800: 8:1 on white */
+  }
+  .card {
+    border: 1px solid #94a3b8; /* slate-400: gives cards a visible edge on the slate-100 page */
+    border-radius: 0.75rem;
+    background-color: #ffffff;
+  }
 }

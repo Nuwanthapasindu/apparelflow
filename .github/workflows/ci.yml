@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # prisma.config.ts reads both URLs with env(), which throws when they are missing, so
+    # every prisma command (including the `prisma generate` in postinstall and build) needs
+    # them. Both point at the throwaway service container below, never at Supabase.
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
+      DIRECT_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
+
+    # Throwaway Postgres for the database trigger tests. Never Supabase.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: apparelflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+
+      # postinstall runs `prisma generate`, which needs no database or env vars.
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # .env.test is git-ignored. Both URLs must be defined so a migration can never
+      # fall back to another database; the test guard also refuses anything non-local.
+      - name: Create .env.test
+        run: |
+          cat > .env.test <<'ENV'
+          DATABASE_URL="postgresql://postgres:test@localhost:5432/apparelflow_test"
+          DIRECT_URL="postgresql://postgres:test@localhost:5432/apparelflow_test"
+          JWT_SECRET="ci-only-throwaway-secret-0123456789abcdef"
+          ENV
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Validate Prisma schema
+        run: yarn prisma validate
+
+      # LayoutProps and the route types are generated, not committed.
+      - name: Generate Next.js types
+        run: yarn next typegen
+
+      - name: Type-check
+        run: yarn tsc --noEmit
+
+      - name: Apply migrations to the test database
+        run: yarn db:migrate:test
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Build
+        run: yarn build
