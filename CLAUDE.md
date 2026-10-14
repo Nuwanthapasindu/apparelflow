@@ -10,6 +10,7 @@ ApparelFlow ERP: Cutting Gatekeeper. Webtezza (Pvt) Ltd Software Engineering Int
 
 - **Day 1 (database): done.** Models, raw SQL guard triggers, RLS, seed, `DIRECT_URL` wiring, local test database and trigger tests.
 - **Day 2 (auth, orders): done.** Custom JWT + rotating refresh auth, Role Switcher, order creation engine (`/api/recipes`, `/api/orders`), login page, role-based shell, orders list, creation modal, order detail. The `order_no_sequence` migration must be applied to Supabase before the deployed app can create orders.
+- **Guard gaps closed:** migration `fix_gatekeeper_guard_gaps` makes the approval guard count only items that match the order's recipe components, makes items validate recipe/name/expected quantity on insert, rejects whitespace-only rejection notes, requires an *active* sewing supervisor to start sewing, and makes the batch definition immutable (fabric yards editable only while `REJECTED`).
 - **Not started:** Day 3 (verifier terminal, traffic lights, approve/reject, resubmit, wastage) and Day 4 (sewing queue, Start Sewing, tests, README, AI report). `/verify` and `/sewing` are placeholders. **Update this section as each milestone lands.**
 
 ## Source of truth (highest first)

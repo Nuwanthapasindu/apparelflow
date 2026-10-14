@@ -25,3 +25,21 @@ Public demo logins with sample data only. Sign in on `/login`.
 4. `yarn dev` and open <http://localhost:3000>.
 
 Tests run against a separate local Postgres, never the real database: see `CLAUDE.md` for the setup and `yarn test`.
+
+## Deliberate interpretations and known limitations
+
+Interpretations of the brief:
+
+- **Wastage cap is flag only.** An over-cap batch shows an "OVER CAP" badge and still approves. The brief's hard stop is a RED, missing or uncounted component, and a second blocking rule could stop a valid batch.
+- **Fabric yards are decimals** (greater than 0, at most 2 decimal places). Piece counts and target quantities are integers only.
+- **`CUTTING_IN_PROGRESS` is unused.** It exists in the status enum to match the brief's diagram, but a new order starts as `PENDING_VERIFICATION`. There is no draft state.
+- **A batch is immutable once created.** Recipe, target quantity, fabric roll and order number never change (enforced by a database trigger). Fabric yards can be corrected only while the order is rejected and being re-cut.
+
+Known limitations of the authentication layer (accepted for this assessment):
+
+- No rate limiting or lockout on login.
+- An unknown email is rejected faster than a known one with a wrong password (no dummy hash comparison), so account existence can be inferred from timing.
+- Logging out revokes the refresh token at once, but an access token already issued stays valid for up to 15 minutes.
+- Refresh tokens slide for 7 days with no absolute lifetime cap, and expired token rows are not cleaned up.
+- Two browser tabs refreshing at the very same moment can sign the user out (the second use of a rotated token counts as reuse).
+- Creating an order has no idempotency key; the UI blocks double submits, but a client that retries a request after a timeout can create a second order.
