@@ -14,6 +14,16 @@ export function ResubmitButton({ orderId, orderNo }: { orderId: string; orderNo:
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const inFlight = useRef(false);
+  const resubmitted = useRef(false);
+
+  // The trigger disappears with the REJECTED panel once the refreshed page arrives; without this focus
+  // would fall back to the document body, so keyboard and screen-reader users would lose their place.
+  useEffect(
+    () => () => {
+      if (resubmitted.current) document.getElementById("order-heading")?.focus();
+    },
+    [],
+  );
 
   useEffect(() => {
     const element = dialog.current;
@@ -29,6 +39,7 @@ export function ResubmitButton({ orderId, orderNo }: { orderId: string; orderNo:
     setError(null);
     try {
       await apiFetch<{ order: OrderDetailDto }>(`/api/orders/${orderId}/resubmit`, { method: "POST", body: {} });
+      resubmitted.current = true;
       setOpen(false);
       router.refresh();
     } catch (cause) {
@@ -56,8 +67,8 @@ export function ResubmitButton({ orderId, orderNo }: { orderId: string; orderNo:
             <p className="mt-3 text-slate-700">A new uncounted attempt will be created. Earlier counts and the rejection note remain permanent.</p>
             {error && <p className="field-error mt-3 rounded-lg border border-red-700 bg-red-50 p-3" role="alert"><AlertIcon />{error}</p>}
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" className="btn btn-secondary" onClick={() => { setOpen(false); queueMicrotask(() => trigger.current?.focus()); }} disabled={busy}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={resubmit} disabled={busy}>{busy && <SpinnerIcon />}{busy ? "Resubmitting..." : "Confirm resubmit"}</button>
+              <button type="button" className="btn btn-secondary min-h-12" onClick={() => { setOpen(false); queueMicrotask(() => trigger.current?.focus()); }} disabled={busy}>Cancel</button>
+              <button type="button" className="btn btn-primary min-h-12" onClick={resubmit} disabled={busy}>{busy && <SpinnerIcon />}{busy ? "Resubmitting..." : "Confirm resubmit"}</button>
             </div>
           </div>
         )}

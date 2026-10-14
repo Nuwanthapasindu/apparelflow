@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/badges";
 import { ExpectedCountsTable } from "@/components/expected-counts-table";
 import { RoleGate } from "@/components/role-gate";
 import { ResubmitButton } from "@/components/resubmit-button";
-import { TrafficBadge } from "@/components/traffic-badge";
+import { OverCapBadge, TrafficBadge } from "@/components/traffic-badge";
 import { getSessionUser } from "@/lib/auth/server";
 import { formatDateTime, formatInt } from "@/lib/format";
 import { getOrder } from "@/lib/services/orders";
@@ -27,7 +27,6 @@ async function OrderContent({ params }: { params: Promise<{ id: string }> }) {
   );
 }
 
-// Read only for now: a later milestone adds the rejection note and resubmit on this same route.
 async function OrderDetail({ id }: { id: string }) {
   const user = await getSessionUser();
   if (!user) return null; // RoleGate has already redirected a signed-out visitor
@@ -53,7 +52,7 @@ async function OrderDetail({ id }: { id: string }) {
         &larr; Back to orders
       </Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-mono text-2xl font-bold text-slate-900">{order.orderNo}</h1>
+        <h1 id="order-heading" tabIndex={-1} className="font-mono text-2xl font-bold text-slate-900 outline-none">{order.orderNo}</h1>
         <StatusBadge status={order.status} />
       </div>
 
@@ -118,7 +117,7 @@ async function OrderDetail({ id }: { id: string }) {
               <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div><dt className="text-sm text-slate-600">Expected fabric</dt><dd className="font-mono font-bold">{attempt.decision.snapshot.expectedFabricYds} yds</dd></div>
                 <div><dt className="text-sm text-slate-600">Actual fabric</dt><dd className="font-mono font-bold">{attempt.decision.snapshot.actualFabricYds} yds</dd></div>
-                <div><dt className="text-sm text-slate-600">Wastage</dt><dd className="font-mono font-bold">{attempt.decision.snapshot.wastagePct}%{attempt.decision.snapshot.overCap ? " · OVER CAP" : ""}</dd></div>
+                <div><dt className="text-sm text-slate-600">Wastage</dt><dd className="flex flex-wrap items-center gap-2 font-mono font-bold">{attempt.decision.snapshot.wastagePct}%{attempt.decision.snapshot.overCap && <OverCapBadge />}</dd></div>
               </dl>
             )}
           </article>

@@ -6,8 +6,8 @@ import { ApiClientError, apiFetch, hardNavigate } from "@/lib/client/api";
 import { evaluateCount } from "@/lib/domain/traffic-light";
 import { formatDateTime, formatInt } from "@/lib/format";
 import type { OrderDetailDto, OrderItemDto } from "@/lib/services/order-dto";
-import { parseActualQtyText, REJECTION_NOTE_MAX } from "@/lib/validation/verification";
-import { AlertIcon, CheckCircleIcon, SpinnerIcon, XCircleIcon } from "./icons";
+import { hasVisibleCharacter, parseActualQtyText, REJECTION_NOTE_MAX } from "@/lib/validation/verification";
+import { AlertIcon, CheckCircleIcon, CircleDashedIcon, SpinnerIcon, XCircleIcon } from "./icons";
 import { OverCapBadge, TrafficBadge } from "./traffic-badge";
 
 type BlockingItem = {
@@ -45,11 +45,13 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null); // shown inside the open dialog, never behind it
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const approveDialog = useRef<HTMLDialogElement>(null);
   const rejectDialog = useRef<HTMLDialogElement>(null);
   const approveTrigger = useRef<HTMLButtonElement>(null);
   const rejectTrigger = useRef<HTMLButtonElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   const inFlight = useRef(false);
 
   useNativeDialog(approveOpen, approveDialog, "[data-autofocus]");
@@ -132,6 +134,7 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
     inFlight.current = true;
     setDeciding(true);
     setBanner(null);
+    setDialogError(null);
     try {
       await apiFetch<{ order: OrderDetailDto }>(`/api/orders/${order.id}/approve`, { method: "POST", body: {} });
       hardNavigate(`/verify?result=verified&order=${encodeURIComponent(order.orderNo)}`);
@@ -141,9 +144,9 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
         setBlocking(list);
         setBanner("Approval is blocked by the stored server counts. Review the highlighted components.");
         setApproveOpen(false);
-        await reload();
+        await reload().catch(() => setBanner("Approval is blocked. Refresh the page to see the stored counts."));
       } else if (cause instanceof ApiClientError && cause.status === 409) conflict();
-      else setBanner(cause instanceof ApiClientError ? cause.message : "The batch could not be approved");
+      else setDialogError(cause instanceof ApiClientError ? cause.message : "The batch could not be approved");
     } finally {
       inFlight.current = false;
       setDeciding(false);
@@ -153,21 +156,29 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
   async function reject() {
     if (inFlight.current) return;
     const trimmed = note.trim();
-    if (!trimmed || trimmed.length > REJECTION_NOTE_MAX || trimmed.includes("\u0000")) {
-      setNoteError(!trimmed ? "Enter a rejection reason" : `Use ${REJECTION_NOTE_MAX} characters or fewer`);
+    const problem = !trimmed || !hasVisibleCharacter(trimmed)
+      ? "Enter a rejection reason"
+      : trimmed.length > REJECTION_NOTE_MAX
+        ? `Use ${REJECTION_NOTE_MAX} characters or fewer`
+        : trimmed.includes("\u0000")
+          ? "The rejection reason contains an unsupported character"
+          : null;
+    if (problem) {
+      setNoteError(problem);
       queueMicrotask(() => rejectDialog.current?.querySelector("textarea")?.focus());
       return;
     }
     inFlight.current = true;
     setDeciding(true);
     setNoteError(null);
+    setDialogError(null);
     try {
       await apiFetch<{ order: OrderDetailDto }>(`/api/orders/${order.id}/reject`, { method: "POST", body: { note: trimmed } });
       hardNavigate(`/verify?result=rejected&order=${encodeURIComponent(order.orderNo)}`);
     } catch (cause) {
       if (cause instanceof ApiClientError && cause.status === 409) conflict();
       else if (cause instanceof ApiClientError && cause.status === 400) setNoteError(cause.fields?.note ?? cause.message);
-      else setBanner(cause instanceof ApiClientError ? cause.message : "The batch could not be rejected");
+      else setDialogError(cause instanceof ApiClientError ? cause.message : "The batch could not be rejected");
     } finally {
       inFlight.current = false;
       setDeciding(false);
@@ -180,9 +191,10 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
       ? `Approve blocked: ${counts.RED} short, ${counts.UNCOUNTED} not counted`
       : "All stored counts meet or exceed the expected quantities";
   const projection = order.fabricProjection;
+  const shortage = counts.RED > 0 || blocking.length > 0;
 
   return (
-    <div className="space-y-5 pb-28 md:pb-0">
+    <div className="space-y-5 pb-40 md:pb-0">
       <Link href="/verify" className="inline-flex min-h-11 items-center font-semibold">&larr; Back to queue</Link>
 
       <header className="rounded-xl border-2 border-slate-800 bg-slate-950 p-5 text-white shadow-sm">
@@ -208,16 +220,19 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
             <div><h2 id="fabric-projection" className="font-bold text-slate-950">Fabric projection</h2><p className="text-sm text-slate-700">Projection, recorded at approval. Over cap is a flag, not a blocker.</p></div>
             {projection.overCap && <OverCapBadge />}
           </div>
-          {[['Expected', `${projection.expectedFabricYds} yds`], ['Used', `${projection.actualFabricYds} yds`], ['Projected wastage', `${projection.wastagePct}%`], ['Recipe cap', `${projection.wastageCapPct}%`]].map(([label, value]) => (
-            <div key={label} className="rounded-lg bg-slate-100 p-3"><dt className="text-xs font-bold uppercase tracking-wide text-slate-600">{label}</dt><dd className="mt-1 font-mono text-lg font-black text-slate-950">{value}</dd></div>
-          ))}
+          <dl className="grid gap-4 sm:col-span-4 sm:grid-cols-4">
+            {[['Expected', `${projection.expectedFabricYds} yds`], ['Used', `${projection.actualFabricYds} yds`], ['Projected wastage', `${projection.wastagePct}%`], ['Recipe cap', `${projection.wastageCapPct}%`]].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-slate-100 p-3"><dt className="text-xs font-bold uppercase tracking-wide text-slate-600">{label}</dt><dd className="mt-1 font-mono text-lg font-black text-slate-950">{value}</dd></div>
+            ))}
+          </dl>
         </section>
       )}
 
-      {(banner || counts.RED > 0 || blocking.length > 0) && (
+      {(banner || shortage) && (
         <section className="rounded-xl border-2 border-red-700 bg-red-50 p-4 text-red-950" role="alert">
-          <h2 className="flex items-center gap-2 font-black"><AlertIcon />Shortage found. Approval is blocked.</h2>
-          <p className="mt-1">{banner ?? "Reject the batch with a reason so the supervisor can re-cut."}</p>
+          <h2 className="flex items-center gap-2 font-black"><AlertIcon />{shortage ? "Shortage found. Approval is blocked." : "Something needs your attention"}</h2>
+          {shortage && <p className="mt-1">Reject the batch with a reason so the supervisor can re-cut.</p>}
+          {banner && <p className="mt-1">{banner}</p>}
           {blocking.length > 0 && <ul className="mt-2 list-disc pl-6">{blocking.map((item) => <li key={item.componentId}>{item.componentName}: {item.reason.toLowerCase()}</li>)}</ul>}
         </section>
       )}
@@ -225,7 +240,8 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
       <section aria-labelledby="component-counts" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><h2 id="component-counts" className="text-xl font-black text-slate-950">Component counts</h2><p className="text-slate-700">Enter actual pieces. Press Enter to move to the next row.</p></div>
-          <p className={`rounded-full border px-3 py-1 text-sm font-bold ${dirty ? "border-amber-700 bg-amber-100 text-amber-950" : "border-green-700 bg-green-100 text-green-950"}`}>
+          <p role="status" className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold ${dirty ? "border-slate-700 bg-slate-100 text-slate-950" : "border-blue-700 bg-blue-50 text-blue-950"}`}>
+            {dirty ? <CircleDashedIcon /> : <CheckCircleIcon />}
             {dirty ? "Not saved" : savedAt ? "Saved" : "Stored counts loaded"}
           </p>
         </div>
@@ -242,7 +258,7 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
             const isRed = row.status === "RED" || blocking.some((item) => item.componentId === row.item.componentId);
             const errorId = `count-${row.item.componentId}-error`;
             return (
-              <article key={row.item.componentId} className={`grid items-center gap-3 rounded-xl border bg-white p-4 sm:grid-cols-[minmax(12rem,1.5fr)_8rem_10rem_7rem_9rem] ${isRed ? "border-red-700 border-l-8 bg-red-50" : "border-slate-400"}`}>
+              <article key={row.item.componentId} className={`grid items-center gap-3 rounded-xl border bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.5fr)_8rem_10rem_7rem_9rem] ${isRed ? "border-red-700 border-l-8 bg-red-50" : "border-slate-400"}`}>
                 <div><h3 className="font-bold text-slate-950">{row.item.componentName}</h3><p className="text-sm text-slate-600">Expected snapshot</p></div>
                 <div><p className="text-xs font-bold uppercase tracking-wide text-slate-600">Expected</p><p className="font-mono text-3xl font-black text-slate-950">{formatInt(row.item.expectedQty)}</p></div>
                 <div>
@@ -256,7 +272,9 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
                     value={row.text}
                     onChange={(event) => setValues((current) => ({ ...current, [row.item.componentId]: event.target.value }))}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" && inputs.current[index + 1]) { event.preventDefault(); inputs.current[index + 1]?.focus(); }
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      (inputs.current[index + 1] ?? saveButton.current)?.focus();
                     }}
                     aria-invalid={row.error ? true : undefined}
                     aria-describedby={row.error ? errorId : undefined}
@@ -273,27 +291,30 @@ export function VerificationWorkspace({ initialOrder }: { initialOrder: OrderDet
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-500 bg-white p-4">
-        <div><p id="approve-reason" className="font-semibold text-slate-900">{blockReason}</p>{savedAt && <p className="text-sm text-slate-600">Last saved this session at {formatDateTime(savedAt)}</p>}</div>
-        <button type="button" className="btn btn-secondary min-h-12" onClick={save} disabled={saving || deciding || !dirty || invalid > 0}>
+        <p className="text-sm text-slate-700">{savedAt ? `Last saved this session at ${formatDateTime(savedAt)}` : "Counts are kept only after you press Save counts."}</p>
+        <button ref={saveButton} type="button" className="btn btn-secondary min-h-12" onClick={save} disabled={saving || deciding || !dirty || invalid > 0}>
           {saving && <SpinnerIcon />}{saving ? "Saving..." : "Save counts"}
         </button>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 flex gap-3 border-t border-slate-400 bg-white p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] md:static md:justify-between md:border-0 md:bg-transparent md:p-0 md:shadow-none">
-        <button ref={rejectTrigger} type="button" className="btn min-h-12 flex-1 border-2 border-red-700 bg-white text-red-900 hover:bg-red-50 md:flex-none" onClick={() => setRejectOpen(true)} disabled={deciding}>
-          <XCircleIcon />Reject Batch
-        </button>
-        <button ref={approveTrigger} type="button" className="btn btn-primary min-h-12 flex-1 md:flex-none" disabled={!canApprove} aria-describedby="approve-reason" onClick={() => setApproveOpen(true)}>
-          <CheckCircleIcon />Approve Batch
-        </button>
+      <div className="fixed inset-x-0 bottom-0 z-20 mb-0 border-t border-slate-400 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.12)] md:static md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+        <p id="approve-reason" className="mb-2 text-sm font-semibold text-slate-900 md:text-base">{blockReason}</p>
+        <div className="flex gap-6 md:justify-between">
+          <button ref={rejectTrigger} type="button" className="btn min-h-12 flex-1 border-2 border-red-700 bg-white text-red-900 hover:bg-red-50 disabled:border-slate-400 disabled:bg-slate-200 disabled:text-slate-600 md:flex-none" onClick={() => { setDialogError(null); setRejectOpen(true); }} disabled={deciding}>
+            <XCircleIcon />Reject Batch
+          </button>
+          <button ref={approveTrigger} type="button" className="btn btn-primary min-h-12 flex-1 md:flex-none" disabled={!canApprove} aria-describedby="approve-reason" onClick={() => { setDialogError(null); setApproveOpen(true); }}>
+            <CheckCircleIcon />Approve Batch
+          </button>
+        </div>
       </div>
 
       <dialog ref={approveDialog} aria-labelledby="approve-title" onCancel={(event) => { event.preventDefault(); if (!deciding) setApproveOpen(false); }} className="m-auto w-[calc(100%-1rem)] max-w-lg rounded-xl border border-slate-500 bg-white p-0 text-slate-950 shadow-xl backdrop:bg-slate-950/65">
-        {approveOpen && <div className="p-5"><h2 id="approve-title" className="text-xl font-black">Approve {order.orderNo}?</h2><p className="mt-2 text-slate-800">{counts.GREEN} match, {counts.YELLOW} excess. Projected wastage {projection?.wastagePct ?? "—"}%.</p>{projection?.overCap && <div className="mt-3"><OverCapBadge /></div>}<p className="mt-4 rounded-lg bg-slate-100 p-3 font-semibold">This sign-off is permanent and recorded under your name.</p><div className="mt-5 flex justify-end gap-3"><button type="button" className="btn btn-secondary" onClick={() => { setApproveOpen(false); queueMicrotask(() => approveTrigger.current?.focus()); }} disabled={deciding}>Cancel</button><button data-autofocus type="button" className="btn btn-primary" onClick={approve} disabled={deciding}>{deciding && <SpinnerIcon />}{deciding ? "Approving..." : "Confirm approval"}</button></div></div>}
+        {approveOpen && <div className="p-5"><h2 id="approve-title" className="text-xl font-black">Approve {order.orderNo}?</h2><p className="mt-2 text-slate-800">{counts.GREEN} match, {counts.YELLOW} excess. Projected wastage {projection?.wastagePct ?? "—"}%.</p>{projection?.overCap && <div className="mt-3"><OverCapBadge /></div>}<p className="mt-4 rounded-lg bg-slate-100 p-3 font-semibold">This sign-off is permanent and recorded under your name.</p>{dialogError && <p className="field-error mt-3" role="alert"><AlertIcon />{dialogError}</p>}<div className="mt-5 flex justify-end gap-3"><button type="button" className="btn btn-secondary min-h-12" onClick={() => { setApproveOpen(false); queueMicrotask(() => approveTrigger.current?.focus()); }} disabled={deciding}>Cancel</button><button data-autofocus type="button" className="btn btn-primary min-h-12" onClick={approve} disabled={deciding}>{deciding && <SpinnerIcon />}{deciding ? "Approving..." : "Confirm approval"}</button></div></div>}
       </dialog>
 
       <dialog ref={rejectDialog} aria-labelledby="reject-title" onCancel={(event) => { event.preventDefault(); if (!deciding) setRejectOpen(false); }} className="m-auto w-[calc(100%-1rem)] max-w-lg rounded-xl border border-slate-500 bg-white p-0 text-slate-950 shadow-xl backdrop:bg-slate-950/65">
-        {rejectOpen && <div className="p-5"><h2 id="reject-title" className="text-xl font-black">Reject {order.orderNo}</h2><p className="mt-1 text-slate-700">Tell the cutting supervisor exactly what must be re-cut.</p><label htmlFor="rejection-note" className="field-label mt-4">Rejection reason</label><textarea id="rejection-note" rows={5} maxLength={REJECTION_NOTE_MAX} value={note} onChange={(event) => { setNote(event.target.value); if (noteError) setNoteError(null); }} aria-invalid={noteError ? true : undefined} aria-describedby="note-counter rejection-note-error" disabled={deciding} />{noteError && <p id="rejection-note-error" className="field-error" role="alert"><AlertIcon />{noteError}</p>}<p id="note-counter" className="mt-1 text-right text-sm text-slate-700">{note.length} / {REJECTION_NOTE_MAX}</p><div className="mt-5 flex justify-end gap-3"><button type="button" className="btn btn-secondary" onClick={() => { setRejectOpen(false); queueMicrotask(() => rejectTrigger.current?.focus()); }} disabled={deciding}>Cancel</button><button type="button" className="btn min-h-11 border-2 border-red-700 bg-red-700 text-white hover:bg-red-800" onClick={reject} disabled={deciding}>{deciding && <SpinnerIcon />}{deciding ? "Rejecting..." : "Confirm rejection"}</button></div></div>}
+        {rejectOpen && <div className="p-5"><h2 id="reject-title" className="text-xl font-black">Reject {order.orderNo}</h2><p className="mt-1 text-slate-700">Tell the cutting supervisor exactly what must be re-cut.</p><label htmlFor="rejection-note" className="field-label mt-4">Rejection reason</label><textarea id="rejection-note" rows={5} maxLength={REJECTION_NOTE_MAX} value={note} onChange={(event) => { setNote(event.target.value); if (noteError) setNoteError(null); }} aria-invalid={noteError ? true : undefined} aria-describedby={noteError ? "note-counter rejection-note-error" : "note-counter"} disabled={deciding} />{noteError && <p id="rejection-note-error" className="field-error" role="alert"><AlertIcon />{noteError}</p>}<p id="note-counter" className="mt-1 text-right text-sm text-slate-700">{note.length} / {REJECTION_NOTE_MAX}</p>{dialogError && <p className="field-error mt-2" role="alert"><AlertIcon />{dialogError}</p>}<div className="mt-5 flex justify-end gap-3"><button type="button" className="btn btn-secondary min-h-12" onClick={() => { setRejectOpen(false); queueMicrotask(() => rejectTrigger.current?.focus()); }} disabled={deciding}>Cancel</button><button type="button" className="btn min-h-12 border-2 border-red-700 bg-red-700 text-white hover:bg-red-800 disabled:border-slate-400 disabled:bg-slate-200 disabled:text-slate-600" onClick={reject} disabled={deciding}>{deciding && <SpinnerIcon />}{deciding ? "Rejecting..." : "Confirm rejection"}</button></div></div>}
       </dialog>
     </div>
   );

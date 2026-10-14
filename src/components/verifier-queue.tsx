@@ -59,6 +59,7 @@ export function VerifierQueue({
   }
 
   const notice = result === "verified" || result === "rejected" ? `${orderNo ?? "Batch"} ${result}` : null;
+  const conflict = result === "conflict" ? `${orderNo ?? "This batch"} was already decided or changed by someone else.` : null;
 
   return (
     <div className="space-y-5">
@@ -80,6 +81,12 @@ export function VerifierQueue({
           {notice}
         </p>
       )}
+      {conflict && (
+        <p className="flex items-center gap-2 rounded-lg border border-amber-700 bg-amber-50 p-3 font-semibold text-amber-950" role="status">
+          <AlertIcon />
+          {conflict}
+        </p>
+      )}
       {error && (
         <p className="flex items-center gap-2 rounded-lg border border-red-700 bg-red-50 p-3 font-semibold text-red-950" role="alert">
           <AlertIcon />
@@ -92,7 +99,7 @@ export function VerifierQueue({
           <ClockIcon className="mx-auto text-4xl text-slate-600" />
           <h2 id="empty-queue" className="mt-3 text-xl font-bold text-slate-950">No batches waiting for verification</h2>
           <p className="mt-1 text-slate-700">Last refreshed {formatDateTime(refreshedAt)}.</p>
-          <button type="button" className="btn btn-secondary mt-4" onClick={refresh} disabled={busy}>Refresh</button>
+          <button type="button" className="btn btn-secondary mt-4 min-h-12" onClick={refresh} disabled={busy}>Refresh</button>
         </section>
       ) : (
         <>
@@ -113,7 +120,7 @@ export function VerifierQueue({
                       <h2 className="mt-1 font-mono text-2xl font-black text-blue-900 group-hover:underline">{order.orderNo}</h2>
                     </div>
                     {order.currentAttempt > 1 && (
-                      <span className="rounded-full border border-red-700 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-900">Re-cut #{order.currentAttempt}</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-700 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-950"><RefreshIcon />Re-cut #{order.currentAttempt}</span>
                     )}
                   </div>
                   <p className="mt-3 text-lg font-bold">{order.recipe.name}</p>
