@@ -12,6 +12,14 @@ const STATUS = {
   CUTTING_IN_PROGRESS: { label: "Cutting in progress", Icon: ScissorsIcon, style: "border-slate-600 bg-slate-100 text-slate-900" },
 } as const satisfies Record<OrderStatus, { label: string; Icon: typeof ClockIcon; style: string }>;
 
+export const STATUS_LABEL: Record<OrderStatus, string> = {
+  PENDING_VERIFICATION: STATUS.PENDING_VERIFICATION.label,
+  REJECTED: STATUS.REJECTED.label,
+  VERIFIED: STATUS.VERIFIED.label,
+  IN_SEWING: STATUS.IN_SEWING.label,
+  CUTTING_IN_PROGRESS: STATUS.CUTTING_IN_PROGRESS.label,
+};
+
 export function StatusBadge({ status }: { status: OrderStatus }) {
   const { label, Icon, style } = STATUS[status];
   return (
