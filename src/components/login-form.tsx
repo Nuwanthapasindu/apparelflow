@@ -4,14 +4,13 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { MAX_EMAIL_LENGTH, MAX_PASSWORD_LENGTH } from "@/lib/validation/auth";
 import { ApiClientError, apiFetch } from "@/lib/client/api";
-import type { DemoPersona } from "@/lib/demo";
-import { LANDING, ROLE_LABEL } from "@/lib/nav";
+import { LANDING } from "@/lib/nav";
 import type { Role } from "@/generated/prisma/enums";
 import { AlertIcon, SpinnerIcon } from "./icons";
 
 type LoginResult = { user: { role: Role } };
 
-export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notice?: string }) {
+export function LoginForm({ notice }: { notice?: string }) {
   const router = useRouter();
   const ids = { email: useId(), password: useId(), error: useId() };
   const emailRef = useRef<HTMLInputElement>(null);
@@ -22,12 +21,12 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null); // "manual" or a persona key
+  const [busy, setBusy] = useState(false);
 
-  async function signIn(credentials: { email: string; password: string }, who: string) {
+  async function signIn(credentials: { email: string; password: string }) {
     if (inFlight.current) return;
     inFlight.current = true;
-    setBusy(who);
+    setBusy(true);
     setFormError(null);
     try {
       const { user } = await apiFetch<LoginResult>("/api/auth/login", { method: "POST", body: credentials });
@@ -35,7 +34,7 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
       router.refresh();
     } catch (e) {
       inFlight.current = false;
-      setBusy(null);
+      setBusy(false);
       if (e instanceof ApiClientError && e.status === 401) setFormError("Invalid email or password");
       else if (e instanceof ApiClientError && e.status === 400) setFormError("Check the email and password and try again");
       else setFormError("Could not sign in. Check your connection and try again.");
@@ -53,16 +52,16 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
     setFieldErrors(errors);
     if (errors.email) return emailRef.current?.focus();
     if (errors.password) return passwordRef.current?.focus();
-    void signIn({ email: trimmed, password }, "manual");
+    void signIn({ email: trimmed, password });
   }
 
-  const disabled = busy !== null;
+  const disabled = busy;
   const describedBy = (field: "email" | "password") =>
     [fieldErrors[field] ? `${ids[field]}-error` : null, formError ? ids.error : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-10 lg:grid-cols-2">
-      <section className="card p-6" aria-labelledby="signin-title">
+    <div className="flex min-h-screen w-full items-center justify-center px-4 py-10">
+      <section className="card w-full max-w-md p-6" aria-labelledby="signin-title">
         <h1 id="signin-title" className="text-2xl font-bold text-slate-900">
           Sign in
         </h1>
@@ -132,38 +131,11 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
           )}
 
           <button type="submit" className="btn btn-primary w-full" disabled={disabled}>
-            {busy === "manual" && <SpinnerIcon />}
-            {busy === "manual" ? "Signing in..." : "Sign in"}
+            {busy && <SpinnerIcon />}
+            {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </section>
-
-      {personas.length > 0 && (
-        <section aria-labelledby="demo-title">
-          <h2 id="demo-title" className="text-lg font-bold text-slate-900">
-            Demo accounts
-          </h2>
-          <p className="mt-1 text-slate-800">Public demo logins with sample data. Pick a role to sign in as that user.</p>
-          <ul className="mt-4 space-y-3">
-            {personas.map((p) => (
-              <li key={p.key} className="card p-4">
-                <h3 className="font-bold text-slate-900">{ROLE_LABEL[p.role]}</h3>
-                <p className="mt-1 text-slate-800">{p.summary}</p>
-                <p className="mt-2 break-all font-mono text-sm text-slate-900">{p.email}</p>
-                <button
-                  type="button"
-                  className="btn btn-secondary mt-3"
-                  disabled={disabled}
-                  onClick={() => signIn({ email: p.email, password: p.password }, p.key)}
-                >
-                  {busy === p.key && <SpinnerIcon />}
-                  {busy === p.key ? "Signing in..." : `Sign in as ${p.label}`}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

@@ -12,8 +12,8 @@ Public demo logins with sample data only. Sign in on `/login`.
 | Cutting Verifier | `cutting.verifier@apparelflow.test` | `Demo-Verifier-1` | Count components, approve or reject | Create orders, see the Sewing Queue |
 | Sewing Supervisor | `sewing.supervisor@apparelflow.test` | `Demo-Sewing-1` | View verified batches, start sewing | See pending, unverified or rejected orders |
 
-- With `NEXT_PUBLIC_DEMO_MODE=true` the login page shows these as one-click cards and the header shows a **Role Switcher**. The Role Switcher signs out and signs in again through the real login endpoint, so the server-side session really changes.
-- Without that flag only the manual email and password form is shown.
+- The login page is a single centered email and password form. With `NEXT_PUBLIC_DEMO_MODE=true` the header also shows a **Role Switcher**. The Role Switcher signs out and signs in again through the real login endpoint, so the server-side session really changes.
+- Without that flag there is no Role Switcher; sign out and sign in with another account instead.
 - The accounts are created by the seed (`yarn prisma db seed`). Re-running the seed resets their passwords to the values above.
 - Which pages exist per role today: Supervisor `/orders` (list, create, detail). Verifier `/verify` and Sewing `/sewing` are placeholders until the next milestone.
 
