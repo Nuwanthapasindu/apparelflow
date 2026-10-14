@@ -8,7 +8,9 @@ ApparelFlow ERP: Cutting Gatekeeper. Webtezza (Pvt) Ltd Software Engineering Int
 
 ## Status
 
-Early scaffold: the app is still the unmodified `create-next-app` starter (`src/app/page.tsx`, `layout.tsx`) with Prisma wired up but no models, routes, or tests yet. Dependencies (`bcryptjs`, `jose`, `zod`, `@prisma/client`) point to a planned auth + database app, but none of it is implemented. Don't assume it exists. **Update this section as each milestone lands** (Day 1 DB and deploy, Day 2 orders and auth, Day 3 verifier and hard stop, Day 4 sewing, tests, docs).
+- **Day 1 (database): done.** Models, raw SQL guard triggers, RLS, seed, `DIRECT_URL` wiring, local test database and trigger tests.
+- **Day 2 (auth, orders): done.** Custom JWT + rotating refresh auth, Role Switcher, order creation engine (`/api/recipes`, `/api/orders`), login page, role-based shell, orders list, creation modal, order detail. The `order_no_sequence` migration must be applied to Supabase before the deployed app can create orders.
+- **Not started:** Day 3 (verifier terminal, traffic lights, approve/reject, resubmit, wastage) and Day 4 (sewing queue, Start Sewing, tests, README, AI report). `/verify` and `/sewing` are placeholders. **Update this section as each milestone lands.**
 
 ## Source of truth (highest first)
 
@@ -36,7 +38,10 @@ yarn dev                        # next dev
 yarn build                      # next build
 yarn start                      # next start
 yarn lint                       # eslint (flat config: next core-web-vitals + typescript)
-yarn tsc --noEmit               # type-check (no script defined yet)
+yarn tsc --noEmit               # type-check (no script defined); run `yarn next typegen` first on a clean checkout
+yarn test                       # vitest against the LOCAL test Postgres (loads .env.test, aborts if the DB is not local and named *test*)
+yarn test tests/api/orders.test.ts   # one file (always go through `yarn test`, never bare `vitest`)
+yarn db:migrate:test            # apply migrations to the test database
 yarn prisma validate            # must pass before every push
 yarn prisma generate            # regenerate the client into src/generated/prisma
 yarn prisma migrate dev --name <change>
@@ -44,7 +49,7 @@ yarn prisma migrate dev --create-only --name <change>   # raw SQL migrations (tr
 yarn prisma db seed
 ```
 
-`vitest` and `vite-tsconfig-paths` are installed, but there is no vitest config, no `test` script and no test files yet. Planned: a `test` script that loads `.env.test` (separate local Postgres, never Supabase) and runs `vitest run`; a single file: `yarn vitest run path/to/file.test.ts`. See `.claude/rules/testing.md`.
+Tests need the throwaway Postgres on port 5433 (`docker run -d --name apparelflow-test -e POSTGRES_PASSWORD=test -p 5433:5432 postgres:16`, database `apparelflow_test`) and a git-ignored `.env.test` that defines **both** `DATABASE_URL` and `DIRECT_URL` (localhost) and a `JWT_SECRET` of 32+ characters. Test files run serially and reset with `TRUNCATE ... CASCADE`. Layout: `tests/db-triggers` (raw SQL guards), `tests/api` (route handlers called directly with raw `Request`s), `tests/domain` and `tests/client` (pure logic, no DB). See `.claude/rules/testing.md`.
 
 Never run `prisma migrate reset` or `prisma db push` (they wipe data or bypass migrations and triggers). Never read or print `.env*` files.
 
@@ -52,15 +57,23 @@ Never run `prisma migrate reset` or `prisma db push` (they wipe data or bypass m
 
 - `prisma/schema.prisma` uses the `prisma-client` generator with output `src/generated/prisma` (git-ignored). **Import the client and types from `@/generated/prisma/...`, not from `@prisma/client`**, and run `prisma generate` after cloning or changing the schema.
 - `prisma.config.ts` loads `.env` via `dotenv/config` and reads `DATABASE_URL`. It sets `engine: "classic"`, and migrations go in `prisma/migrations`.
-- `.env.example` documents two connection strings: `DATABASE_URL` (transaction-mode pooler, for runtime) and `DIRECT_URL` (session-mode pooler, for migrations). Only `DATABASE_URL` is currently referenced; **`DIRECT_URL` is not wired in yet**. Migrations must not run through the transaction pooler. Wiring it is a Day 1 task: read the installed Prisma docs to see how `prisma.config.ts` and the schema datasource interact in this version, then verify with `yarn prisma validate`. Do not guess.
-- `.env.example` has no `=` after the variable names; fill real values into `.env` (git-ignored) rather than copying it as-is.
+- `.env.example` lists `DATABASE_URL` (transaction-mode pooler, runtime), `DIRECT_URL` (session-mode pooler, migrations), `JWT_SECRET` and `NEXT_PUBLIC_DEMO_MODE`. **In this Prisma version the classic-engine `datasource` in `prisma.config.ts` overrides the schema datasource**, so `directUrl` is set there (the schema also carries it); verified that `migrate` uses `DIRECT_URL` and the generated client uses `DATABASE_URL`. `env()` in the config throws when a variable is missing, so every prisma command, including the `prisma generate` in `postinstall` and `build`, needs both URLs set (CI sets them at job level; Vercel needs both as environment variables).
+- `.env.example` lists names only; fill real values into `.env` (git-ignored).
 - Keep the existing generator and datasource blocks. Add the project's enums and models (see `docs/DECISIONS.md` and `docs/GAPS_AND_STARTUP_GUIDE.md`) without replacing them.
 - Constraints Prisma cannot express (CHECKs, triggers, views, row level security) live in raw SQL migrations. Details: `.claude/rules/database.md`.
+
+## Architecture (Day 1 and 2)
+
+- **API layer** (`src/lib/api/`): every route is `handle(fn, { mutating })`. It converts thrown errors to the `{ data } / { error: { code, message, fields? } }` envelope, runs the Origin (CSRF) check first for mutations, maps database SQLSTATEs (`src/lib/db-errors.ts`: `GK403`/`GK409`/`GK422`/`23505`/`23514`) to 403/409/422/409/400, hides everything else behind a generic 500, and **rethrows Next.js control-flow errors** (those with a string `digest`). API code reads cookies from the `Request` and writes `Set-Cookie` by hand: never `next/headers` in `src/lib/auth` or routes, so handlers are callable from Vitest.
+- **Auth** (`src/lib/auth/`): HS256 access JWT in `af_access` (only `sub`, `iat`, `exp`, `iss`; no role), opaque refresh token in `af_refresh` (`Path=/api/auth`, stored as SHA-256, rotated with an atomic conditional UPDATE, reuse revokes the family; rotation and revocation of one family are serialised by a per-family advisory lock so a logout cannot race a refresh). `requireRole(request, ...roles)` re-reads the user and role from the DB on every call. Pages cannot see the refresh cookie (its path), so a missing access cookie sends the browser to `/session/restore`, which tries `POST /api/auth/refresh` and falls back to `/login`.
+- **Services** (`src/lib/services/`): plain functions that take the authenticated user and re-assert the role; used by route handlers and server components alike. Queries use explicit `select`s so hashes cannot leak. Order creation is one transaction (sequence number, order, items).
+- **Validation** (`src/lib/validation/order.ts`) is the single source of limits and regexes, imported by the Zod schemas and the order modal. Domain math (`src/lib/domain/`) is pure and shared.
+- **UI** (`src/app`, `src/components`): light theme only, explicit control styles in `globals.css`. Under Cache Components the session is read inside `<Suspense>` (`AppShell`, `RoleGate`), never at the top of a layout. Navigation links come from the server-side role. Sign out and role switching use a **full page load** (`hardNavigate`) because Next keeps visited routes hidden in the DOM and the previous user's data would otherwise stay in a shared terminal's tab. Double submits are blocked with a synchronous ref guard, not only a disabled button. Demo credentials reach the client as props only when `NEXT_PUBLIC_DEMO_MODE=true`.
 
 ## Conventions
 
 - Path alias `@/*` maps to `src/*`. TypeScript is `strict`; the App Router lives in `src/app`.
-- Domain logic (component multiplier, traffic-light status, wastage %) lives in **pure functions** under `src/lib/domain/`, unit-tested without a DB. Zod schemas in `src/lib/validation/`. Auth helpers (`requireRole`) in `src/lib/auth.ts`.
+- Domain logic (component multiplier, traffic-light status, wastage %) lives in **pure functions** under `src/lib/domain/`, unit-tested without a DB. Zod schemas in `src/lib/validation/`. Auth helpers (`requireRole`, tokens, cookies, refresh rotation) in `src/lib/auth/`.
 - API routes under `src/app/api/` (auth, orders, verification, sewing); tests under `tests/` (domain, api, db-triggers).
 
 ## Non-negotiable invariants (details in `.claude/rules/gatekeeper-invariants.md`)
