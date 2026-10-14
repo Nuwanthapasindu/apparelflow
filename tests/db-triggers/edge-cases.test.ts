@@ -85,13 +85,18 @@ describe("edge cases: duplicates and invalid values", () => {
     await expectDbError(sql(`UPDATE users SET role='admin' WHERE id='u_sup'`), "22P02");
   });
 
-  it("a non-positive expected_qty is rejected", async () => {
+  it("a non-positive expected_qty is rejected by the item guard (GK422) and, behind it, by the CHECK (23514)", async () => {
     await createOrder("o1");
     await sql(`DELETE FROM verification_items WHERE component_id='c1'`);
-    await expectDbError(
-      sql(`INSERT INTO verification_items(id,order_id,component_id,attempt_no,component_name,expected_qty) VALUES ('z','o1','c1',1,'Front Body',0)`),
-      "23514",
-    );
+    const insert = `INSERT INTO verification_items(id,order_id,component_id,attempt_no,component_name,expected_qty) VALUES ('z','o1','c1',1,'Front Body',0)`;
+    await expectDbError(sql(insert), "GK422");
+    // BEFORE triggers run ahead of CHECKs, so switch the guard off to prove the CHECK holds on its own.
+    await sql(`ALTER TABLE verification_items DISABLE TRIGGER trg_item_guard`);
+    try {
+      await expectDbError(sql(insert), "23514");
+    } finally {
+      await sql(`ALTER TABLE verification_items ENABLE TRIGGER trg_item_guard`);
+    }
   });
 });
 
