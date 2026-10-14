@@ -1,36 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ApparelFlow Cutting Gatekeeper
 
-## Getting Started
+Cutting operations and gatekeeper verification terminal for ApparelFlow ERP. No cutting batch can reach the Sewing Queue unless a Cutting Verifier has counted every component and signed off. The rule is enforced by the API and by PostgreSQL itself, not only by the UI.
 
-First, run the development server:
+## Demo accounts
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Public demo logins with sample data only. Sign in on `/login`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Role | Email | Password | Can | Cannot |
+|---|---|---|---|---|
+| Cutting Supervisor | `cutting.supervisor@apparelflow.test` | `Demo-Supervisor-1` | Create cutting orders, log fabric used | Verify counts, see the Sewing Queue |
+| Cutting Verifier | `cutting.verifier@apparelflow.test` | `Demo-Verifier-1` | Count components, approve or reject | Create orders, see the Sewing Queue |
+| Sewing Supervisor | `sewing.supervisor@apparelflow.test` | `Demo-Sewing-1` | View verified batches, start sewing | See pending, unverified or rejected orders |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- With `NEXT_PUBLIC_DEMO_MODE=true` the login page shows these as one-click cards and the header shows a **Role Switcher**. The Role Switcher signs out and signs in again through the real login endpoint, so the server-side session really changes.
+- Without that flag only the manual email and password form is shown.
+- The accounts are created by the seed (`yarn prisma db seed`). Re-running the seed resets their passwords to the values above.
+- Which pages exist per role today: Supervisor `/orders` (list, create, detail). Verifier `/verify` and Sewing `/sewing` are placeholders until the next milestone.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Run locally
 
-## Learn More
+1. `yarn install` (this also runs `prisma generate`).
+2. Create `.env` with `DATABASE_URL` (pooled runtime connection), `DIRECT_URL` (direct connection, used for migrations), `JWT_SECRET` (32 or more characters) and `NEXT_PUBLIC_DEMO_MODE=true`.
+3. `yarn prisma migrate deploy`, then `yarn prisma db seed`.
+4. `yarn dev` and open <http://localhost:3000>.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tests run against a separate local Postgres, never the real database: see `CLAUDE.md` for the setup and `yarn test`.
