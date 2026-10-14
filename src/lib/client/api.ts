@@ -1,4 +1,5 @@
-// Browser-side fetch helper for the JSON API. Never imported by server code.
+// Browser-side HTTP helper (axios) for the JSON API. Never imported by server code.
+import axios from "axios";
 
 export class ApiClientError extends Error {
   constructor(
@@ -12,6 +13,22 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * The one HTTP client for the browser. Cookies travel automatically because every call is
+ * same-origin. `validateStatus` accepts every status so that this module, not axios, decides what
+ * an error response means (the server always answers with the { error } envelope).
+ */
+export const apiClient = axios.create({ timeout: 30_000, validateStatus: () => true });
+
+type Envelope<T> = { data?: T; error?: { code?: string; message?: string; fields?: Record<string, string> } };
+type Init = { method?: string; body?: unknown };
+
+function send<T>(path: string, init: Init) {
+  return apiClient.request<Envelope<T> | string>({ url: path, method: init.method ?? "GET", data: init.body });
+}
+
+const succeeded = (status: number) => status >= 200 && status < 300;
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 /**
@@ -20,8 +37,9 @@ let refreshInFlight: Promise<boolean> | null = null;
  * theft and answers by revoking the whole session family.
  */
 export function refreshSession(): Promise<boolean> {
-  refreshInFlight ??= fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" })
-    .then((res) => res.ok)
+  refreshInFlight ??= apiClient
+    .post("/api/auth/refresh")
+    .then((res) => succeeded(res.status))
     .catch(() => false)
     .finally(() => {
       refreshInFlight = null;
@@ -29,29 +47,22 @@ export function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function send(path: string, init: { method?: string; body?: unknown }): Promise<Response> {
-  return fetch(path, {
-    method: init.method ?? "GET",
-    credentials: "same-origin",
-    headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-}
-
 /** Calls the API and returns `data`. On a 401 it refreshes once (POST, single-flight) and retries once. */
-export async function apiFetch<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  let res = await send(path, init);
-  if (res.status === 401 && !path.startsWith("/api/auth/") && (await refreshSession())) {
-    res = await send(path, init);
+export async function apiFetch<T>(path: string, init: Init = {}): Promise<T> {
+  let res;
+  try {
+    res = await send<T>(path, init);
+    if (res.status === 401 && !path.startsWith("/api/auth/") && (await refreshSession())) {
+      res = await send<T>(path, init);
+    }
+  } catch {
+    // No response at all: offline, DNS failure, timeout.
+    throw new ApiClientError(0, "NETWORK", "Could not reach the server");
   }
 
-  let payload: { data?: T; error?: { code?: string; message?: string; fields?: Record<string, string> } } | null = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
-  if (!res.ok) {
+  // A proxy error page is a string, not our envelope.
+  const payload: Envelope<T> | null = typeof res.data === "object" && res.data !== null ? res.data : null;
+  if (!succeeded(res.status)) {
     const error = payload?.error;
     throw new ApiClientError(res.status, error?.code ?? "INTERNAL", error?.message ?? "Something went wrong", error?.fields);
   }

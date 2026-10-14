@@ -15,6 +15,7 @@
   "dependencies": {
     "@prisma/client": "6",
     "argon2": "^0.45.1",
+    "axios": "^1.20.0",
     "jose": "^6.2.12",
     "next": "16.4.0",
     "react": "19.3.0",
