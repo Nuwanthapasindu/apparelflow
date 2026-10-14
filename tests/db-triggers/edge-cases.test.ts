@@ -141,7 +141,8 @@ describe("security: evidence cannot be reused or borrowed", () => {
     const before = await prisma.cuttingOrder.findUniqueOrThrow({ where: { id: "o1" } });
     await prisma.user.create({ data: { id: "u_sew2", email: "w2@x", passwordHash: "h", role: "sewing_supervisor", fullName: "Sew2" } });
     await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_by='u_sew2' WHERE id='o1'`), "GK409");
-    await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_at=now() WHERE id='o1'`), "GK409");
+    // Always a different value: `now()` could coincide with the stored millisecond when the DB and host clocks are close, which would make this a no-op the trigger rightly allows.
+    await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_at = sewing_started_at + interval '1 second' WHERE id='o1'`), "GK409");
     await expectDbError(sql(`UPDATE cutting_orders SET sewing_started_by=NULL, sewing_started_at=NULL WHERE id='o1'`), "GK409");
     await expectDbError(
       sql(`UPDATE cutting_orders SET status='IN_SEWING', sewing_started_by='u_sew2', sewing_started_at=now() WHERE id='o1'`),
