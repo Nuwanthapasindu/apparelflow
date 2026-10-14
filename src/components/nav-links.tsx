@@ -16,7 +16,7 @@ export function NavLinks({ items }: { items: { href: string; label: string }[] }
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={`inline-flex min-h-11 items-center rounded-lg px-3 font-semibold no-underline ${
-                  active ? "bg-blue-100 text-blue-900" : "text-slate-900 hover:bg-slate-100"
+                  active ? "bg-blue-100 text-blue-900 underline decoration-2 underline-offset-8" : "text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 {item.label}

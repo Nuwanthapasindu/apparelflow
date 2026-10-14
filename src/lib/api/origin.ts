@@ -6,7 +6,12 @@ import { errors } from "./errors";
  */
 export function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
-  if (origin === null) return;
+  if (origin === null) {
+    // Browsers always send Origin on a cross-site POST, but if it is ever missing, the Fetch
+    // Metadata header still says the request came from another site. curl and Postman send neither.
+    if (request.headers.get("sec-fetch-site") === "cross-site") throw errors.csrfOrigin();
+    return;
+  }
 
   const host = request.headers.get("host") ?? new URL(request.url).host;
   let originHost: string;

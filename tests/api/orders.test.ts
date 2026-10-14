@@ -433,7 +433,7 @@ describe("GET /api/orders/:id", () => {
     expect((await missing.json()).error.code).toBe("NOT_FOUND");
   });
 
-  it.each(["nope", "' OR 1=1 --", "../../etc/passwd", "x".repeat(2000), "%00", "a b"])("O22: odd id %j is a clean 404", async (id) => {
+  it.each(["nope", "' OR 1=1 --", "../../etc/passwd", "x".repeat(2000), "%00", "a b", "a\u0000b", "\u0000", "00000000-0000-0000-0000-00000000000\u0000"])("O22: odd id %j is a clean 404", async (id) => {
     expect((await getById(id)).status).toBe(404);
   });
 

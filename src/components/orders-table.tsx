@@ -3,11 +3,11 @@ import { formatDateTime, formatInt } from "@/lib/format";
 import type { OrderListItemDto } from "@/lib/services/order-dto";
 import { StatusBadge } from "./badges";
 
-/** Table on wide screens, stacked cards on narrow ones. Both carry the same fields. */
+/** Table on wide screens (the eight columns need about 1000px), stacked cards below that, tablets included. Both carry the same fields. */
 export function OrdersTable({ orders }: { orders: OrderListItemDto[] }) {
   return (
     <>
-      <div className="card hidden overflow-x-auto md:block">
+      <div className="card hidden overflow-x-auto lg:block">
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">Cutting orders, newest first</caption>
           <thead>
@@ -42,7 +42,7 @@ export function OrdersTable({ orders }: { orders: OrderListItemDto[] }) {
         </table>
       </div>
 
-      <ul className="space-y-3 md:hidden" aria-label="Cutting orders, newest first">
+      <ul className="space-y-3 lg:hidden" aria-label="Cutting orders, newest first">
         {orders.map((o) => (
           <li key={o.id} className="card p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">

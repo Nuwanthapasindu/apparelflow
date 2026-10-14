@@ -5,7 +5,8 @@ import { useId } from "react";
 import type { OrderStatus } from "@/generated/prisma/enums";
 import { STATUS_LABEL } from "./badges";
 
-const STATUSES = Object.keys(STATUS_LABEL) as OrderStatus[];
+// CUTTING_IN_PROGRESS exists only to match the brief's diagram and is never assigned, so offering it would always show an empty list.
+const STATUSES = (Object.keys(STATUS_LABEL) as OrderStatus[]).filter((s) => s !== "CUTTING_IN_PROGRESS");
 
 export function StatusFilter({ current }: { current: OrderStatus | "" }) {
   const router = useRouter();

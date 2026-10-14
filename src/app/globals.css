@@ -63,6 +63,17 @@ body {
     outline-offset: 2px;
   }
 
+  /*
+   * Chrome and Safari do not match :focus-visible on a <select> (or a field focused by script)
+   * after a mouse or touch interaction, which would leave a clicked dropdown with no ring at all.
+   */
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
+  }
+
   input:disabled,
   select:disabled,
   textarea:disabled {
@@ -83,7 +94,8 @@ body {
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
   select:-webkit-autofill,
-  textarea:-webkit-autofill {
+  textarea:-webkit-autofill,
+  input:autofill {
     -webkit-text-fill-color: #0f172a;
     caret-color: #0f172a;
     box-shadow: 0 0 0 1000px #ffffff inset;
@@ -152,7 +164,7 @@ body {
     color: #991b1b; /* red-800: 8:1 on white */
   }
   .card {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #94a3b8; /* slate-400: gives cards a visible edge on the slate-100 page */
     border-radius: 0.75rem;
     background-color: #ffffff;
   }

@@ -121,6 +121,11 @@ describe("assertSameOrigin", () => {
     expect(() => check("https://app-git-x.vercel.app", { host: "app-git-x.vercel.app" })).not.toThrow();
   });
 
+  it("rejects a cross-site browser request even if Origin is missing (Sec-Fetch-Site)", () => {
+    expect(() => check(null, { "sec-fetch-site": "cross-site" })).toThrow(ApiError);
+    for (const ok of ["same-origin", "same-site", "none"]) expect(() => check(null, { "sec-fetch-site": ok })).not.toThrow();
+  });
+
   it.each([
     "https://evil.example",
     "http://localhost:3001", // same host, different port
@@ -160,6 +165,11 @@ describe("readJsonBody", () => {
     await expect(body(text)).rejects.toMatchObject({ status: 400, code: "VALIDATION_ERROR" });
   });
 
+  it("rejects an oversized declared Content-Length before reading the body", async () => {
+    const res = readJsonBody(req({ body: "{}", headers: { "content-type": "application/json", "content-length": "5000000" } }));
+    await expect(res).rejects.toMatchObject({ status: 400, code: "VALIDATION_ERROR" });
+  });
+
   it("rejects a request with no body at all", async () => {
     await expect(readJsonBody(req())).rejects.toMatchObject({ status: 400 });
   });
@@ -170,6 +180,17 @@ describe("parseWith", () => {
 
   it("returns parsed data", () => {
     expect(parseWith(schema, { name: "Al", age: 3 })).toEqual({ name: "Al", age: 3 });
+  });
+
+  it("reports prototype-named unknown keys instead of silently dropping them", () => {
+    const body = JSON.parse('{"name":"Al","age":3,"__proto__":{"x":1},"constructor":1,"toString":2,"hasOwnProperty":3}');
+    try {
+      parseWith(schema, body);
+      expect.unreachable();
+    } catch (e) {
+      const keys = Object.keys((e as ApiError).fields ?? {}).sort();
+      expect(keys).toEqual(["__proto__", "constructor", "hasOwnProperty", "toString"]);
+    }
   });
 
   it("maps issues to per-field messages, including unknown keys", () => {

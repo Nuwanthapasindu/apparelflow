@@ -13,7 +13,8 @@ import { prisma } from "../helpers/db";
 vi.mock("bcryptjs", async (importOriginal) => {
   const mod = await importOriginal<typeof import("bcryptjs")>();
   const compare = vi.fn(mod.default.compare);
-  return { ...mod, compare, default: { ...mod.default, compare } };
+  const hash = vi.fn(mod.default.hash);
+  return { ...mod, compare, hash, default: { ...mod.default, compare, hash } };
 });
 
 const BASE = "http://localhost:3000";
@@ -143,6 +144,27 @@ describe("login", () => {
     const first = await loginAs("supervisor");
     await loginAs("verifier", { cookie: refreshOf(first) });
     expect((await refresh(refreshOf(first))).status).toBe(401);
+  });
+
+  it("an unknown email costs one compare and no hashing, even on the very first request", async () => {
+    // A lazily created dummy hash would add a bcrypt.hash on the first unknown email per server
+    // instance, making that one response about twice as slow and revealing the email is unknown.
+    vi.resetModules();
+    const fresh = (await import("bcryptjs")).default;
+    const { authenticate } = await import("@/lib/auth/password");
+    vi.mocked(fresh.hash).mockClear();
+    vi.mocked(fresh.compare).mockClear();
+    expect(await authenticate("first-unknown@apparelflow.test", "whatever-123")).toBeNull();
+    expect(fresh.hash).not.toHaveBeenCalled();
+    expect(fresh.compare).toHaveBeenCalledTimes(1);
+  });
+
+  it("the dummy hash is a valid bcrypt hash with the same cost as real ones", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/lib/auth/password.ts", "utf8");
+    const dummy = /DUMMY_HASH = "([^"]+)"/.exec(source)![1];
+    expect(bcrypt.getRounds(dummy)).toBe(10);
+    expect(await bcrypt.compare("anything", dummy)).toBe(false);
   });
 
   it("A19: an unknown email still runs a bcrypt compare, so timing does not reveal which emails exist", async () => {
@@ -308,6 +330,21 @@ describe("refresh rotation", () => {
     const results = await Promise.all(Array.from({ length: 6 }, () => refresh(cookie)));
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect(results.filter((r) => r.status === 401)).toHaveLength(5);
+  });
+
+  it("logout (or a new login) racing a refresh never leaves a live token in the family", async () => {
+    // The refresh creates a successor token while logout revokes the family. Without serialising the
+    // two, logout's UPDATE (snapshot taken before the successor existed) misses the new token.
+    const survivors: number[] = [];
+    for (let round = 0; round < 25; round++) {
+      const first = await loginAs("supervisor");
+      const familyId = (await prisma.refreshToken.findUniqueOrThrow({ where: { tokenHash: hashToken(rawRefresh(first)) } })).familyId;
+      const cookie = refreshOf(first);
+      const other = round % 2 === 0 ? () => logout(cookie) : () => loginAs("verifier", { cookie });
+      await Promise.all([refresh(cookie), other()]);
+      survivors.push(await prisma.refreshToken.count({ where: { familyId, revokedAt: null } }));
+    }
+    expect(survivors.filter((n) => n > 0)).toEqual([]);
   });
 
   it("A20: refresh is rejected for an inactive user and the family is revoked", async () => {

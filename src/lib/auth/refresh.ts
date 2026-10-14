@@ -12,8 +12,25 @@ const MAX_TOKEN_LENGTH = 200;
 const refreshExpiry = () => new Date(Date.now() + REFRESH_TTL_SECONDS * 1000);
 const unauthorized = () => errors.unauthenticated("Session expired").withCookies(clearedCookies());
 
-const revokeFamily = (db: Pick<typeof prisma, "refreshToken">, familyId: string) =>
-  db.refreshToken.updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } });
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Rotation and revocation of one family must not interleave. Without this, a logout that starts
+ * while a rotation is in flight takes its snapshot before the successor token exists, blocks on
+ * the claimed row, and then never sees the successor: the user logs out but a live token remains.
+ * A transaction-scoped advisory lock (released at commit, safe on the transaction pooler) makes
+ * the second operation start only after the first has committed.
+ */
+const lockFamily = (tx: Tx, familyId: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${familyId}))`;
+
+const revokeFamily = (tx: Tx, familyId: string) =>
+  tx.refreshToken.updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } });
+
+const revokeFamilySerialised = (familyId: string) =>
+  prisma.$transaction(async (tx) => {
+    await lockFamily(tx, familyId);
+    await revokeFamily(tx, familyId);
+  });
 
 /** Login: a brand new token family. */
 export async function startSession(user: AuthUser): Promise<IssuedSession> {
@@ -37,6 +54,7 @@ export async function rotateSession(rawToken: string): Promise<IssuedSession> {
   if (!row || row.revokedAt || row.expiresAt <= new Date()) throw unauthorized();
 
   const outcome = await prisma.$transaction(async (tx) => {
+    await lockFamily(tx, row.familyId);
     const user = await tx.user.findUnique({
       where: { id: row.userId },
       select: { id: true, email: true, fullName: true, role: true, isActive: true },
@@ -74,5 +92,5 @@ export async function rotateSession(rawToken: string): Promise<IssuedSession> {
 export async function revokeSession(rawToken: string | null): Promise<void> {
   if (!rawToken || rawToken.length > MAX_TOKEN_LENGTH) return;
   const row = await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(rawToken) } });
-  if (row) await revokeFamily(prisma, row.familyId);
+  if (row) await revokeFamilySerialised(row.familyId);
 }

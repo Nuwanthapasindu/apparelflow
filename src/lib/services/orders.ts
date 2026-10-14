@@ -3,7 +3,7 @@ import { errors } from "@/lib/api/errors";
 import type { AuthUser } from "@/lib/auth/user";
 import { prisma } from "@/lib/db";
 import type { CreateOrderInput } from "@/lib/validation/order";
-import { MESSAGES } from "@/lib/validation/order";
+import { isOrderId, MESSAGES } from "@/lib/validation/order";
 import type { ListOrdersQuery } from "@/lib/validation/order-query";
 import { insertAttemptItems } from "./order-items";
 import {
@@ -122,6 +122,8 @@ export async function listOrders(
 /** Null when the order does not exist; the caller turns that into a 404 (after the role check). */
 export async function getOrder(user: AuthUser, id: string): Promise<OrderDetailDto | null> {
   assertSupervisor(user);
+  // A malformed id (including a NUL byte, which Postgres refuses in text) cannot exist: not found.
+  if (!isOrderId(id)) return null;
   const row = await prisma.cuttingOrder.findUnique({ where: { id }, select: ORDER_SELECT });
   if (!row) return null;
   return toOrderDetail(row, await prisma.verificationItem.findMany(itemsOf(row.id, row.currentAttempt)));

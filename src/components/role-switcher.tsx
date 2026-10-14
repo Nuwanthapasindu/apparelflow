@@ -4,7 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { apiFetch, hardNavigate } from "@/lib/client/api";
 import type { DemoPersona } from "@/lib/demo";
 import { LANDING } from "@/lib/nav";
-import { SpinnerIcon } from "./icons";
+import { AlertIcon, SpinnerIcon } from "./icons";
 
 /**
  * Demo-mode Role Switcher. It does not flip any client-side role: it signs out (revoking the
@@ -52,7 +52,7 @@ export function RoleSwitcher({ personas, currentEmail }: { personas: DemoPersona
 
   return (
     <div className="flex flex-col">
-      <label htmlFor={selectId} className="sr-only">
+      <label htmlFor={selectId} className="mb-1 text-sm font-medium text-slate-700">
         Switch role
       </label>
       <select
@@ -84,6 +84,7 @@ export function RoleSwitcher({ personas, currentEmail }: { personas: DemoPersona
       </p>
       {error && (
         <p className="field-error" role="alert">
+          <AlertIcon className="mt-0.5" />
           {error}
         </p>
       )}

@@ -6,7 +6,8 @@ export function parseWith<S extends z.ZodType>(schema: S, input: unknown): z.out
   const result = schema.safeParse(input);
   if (result.success) return result.data;
 
-  const fields: FieldErrors = {};
+  // No prototype, so keys such as "constructor" or "__proto__" are recorded like any other.
+  const fields: FieldErrors = Object.create(null);
   for (const issue of result.error.issues) {
     if (issue.code === "unrecognized_keys") {
       for (const key of issue.keys) fields[key] ??= "Unknown field";

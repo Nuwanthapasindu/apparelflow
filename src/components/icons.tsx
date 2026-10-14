@@ -2,7 +2,7 @@ import type { SVGProps } from "react";
 
 // Inline icons so that no status is ever communicated by colour alone. Decorative: hidden from
 // assistive tech, the adjacent text carries the meaning.
-function Icon({ children, ...props }: SVGProps<SVGSVGElement>) {
+function Icon({ children, className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 20 20"
@@ -15,7 +15,7 @@ function Icon({ children, ...props }: SVGProps<SVGSVGElement>) {
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
-      className="shrink-0"
+      className={`shrink-0 ${className ?? ""}`.trim()}
       {...props}
     >
       {children}
@@ -67,7 +67,7 @@ export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 export const SpinnerIcon = (p: SVGProps<SVGSVGElement>) => (
-  <Icon {...p} className="shrink-0 animate-spin">
+  <Icon {...p} className="motion-safe:animate-spin">
     <path d="M10 2.5a7.5 7.5 0 1 0 7.5 7.5" />
   </Icon>
 );

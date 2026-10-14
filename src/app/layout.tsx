@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -11,6 +11,9 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// Tells the browser the page is light-only from the first paint (scrollbars, form controls).
+export const viewport: Viewport = { colorScheme: "light" };
 
 export const metadata: Metadata = {
   title: "ApparelFlow Cutting Gatekeeper",

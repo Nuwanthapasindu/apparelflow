@@ -195,7 +195,7 @@ function OrderForm({
 
   if (created) {
     return (
-      <div className="p-5">
+      <div className="max-h-[90dvh] overflow-y-auto p-5">
         <h2 id={titleId} ref={successHeading} tabIndex={-1} className="flex items-start gap-2 text-xl font-bold text-green-900">
           <CheckCircleIcon className="mt-1" />
           Order {created.orderNo} submitted for verification
@@ -227,7 +227,7 @@ function OrderForm({
     );
 
   return (
-    <form onSubmit={submit} noValidate className="max-h-[90vh] overflow-y-auto p-5">
+    <form onSubmit={submit} noValidate className="max-h-[90dvh] overflow-y-auto p-5">
       <div className="flex items-start justify-between gap-4">
         <h2 id={titleId} className="text-xl font-bold text-slate-900">
           New Cutting Order
@@ -267,10 +267,10 @@ function OrderForm({
               </option>
             ))}
           </select>
+          {fieldError("recipeId")}
           <p id={`${id("recipeId")}-hint`} className="field-hint">
             Decides which components must be counted.
           </p>
-          {fieldError("recipeId")}
         </div>
 
         <div>
@@ -290,10 +290,10 @@ function OrderForm({
             aria-invalid={errors.targetQty ? true : undefined}
             aria-describedby={describedBy("targetQty")}
           />
+          {fieldError("targetQty")}
           <p id={`${id("targetQty")}-hint`} className="field-hint">
             Garments to cut. Whole number, 1 to 100,000.
           </p>
-          {fieldError("targetQty")}
         </div>
 
         <div>
@@ -314,10 +314,10 @@ function OrderForm({
             aria-invalid={errors.fabricRollId ? true : undefined}
             aria-describedby={describedBy("fabricRollId")}
           />
+          {fieldError("fabricRollId")}
           <p id={`${id("fabricRollId")}-hint`} className="field-hint">
             For example FAB-ROLL-882. Letters, digits, . _ - (3 to 40 characters).
           </p>
-          {fieldError("fabricRollId")}
         </div>
 
         <div className="sm:col-span-2">
@@ -338,10 +338,10 @@ function OrderForm({
             aria-describedby={describedBy("actualFabricYds")}
             className="sm:max-w-xs"
           />
+          {fieldError("actualFabricYds")}
           <p id={`${id("actualFabricYds")}-hint`} className="field-hint">
             Yards used from the roll. Greater than 0, up to 2 decimals (for example 91.5).
           </p>
-          {fieldError("actualFabricYds")}
         </div>
       </div>
 
