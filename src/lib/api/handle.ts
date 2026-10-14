@@ -5,6 +5,10 @@ import { errorResponse } from "./response";
 
 type Handler<C> = (request: Request, context: C) => Promise<Response>;
 
+// Next.js uses thrown errors with a string `digest` as control flow (redirect, notFound, "this
+// route is dynamic" during prerender). They are not failures and must reach the framework.
+const isNextSignal = (error: unknown) => typeof (error as { digest?: unknown } | null)?.digest === "string";
+
 /**
  * Wrap a route handler: converts anything thrown into the standard error envelope.
  * `mutating: true` runs the Origin check first, before authentication or parsing.
@@ -15,6 +19,7 @@ export function handle<C = unknown>(handler: Handler<C>, options: { mutating?: b
       if (options.mutating) assertSameOrigin(request);
       return await handler(request, context);
     } catch (error) {
+      if (isNextSignal(error)) throw error;
       if (error instanceof ApiError) return errorResponse(error);
       const mapped = mapDbError(error);
       if (mapped) return errorResponse(mapped);

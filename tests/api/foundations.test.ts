@@ -81,6 +81,15 @@ describe("handle()", () => {
     }
   });
 
+  it("rethrows Next.js control-flow errors instead of turning them into a 500", async () => {
+    const signal = Object.assign(new Error("Route needs to bail out of prerendering"), { digest: "NEXT_PRERENDER_INTERRUPTED" });
+    await expect(
+      handle(async () => {
+        throw signal;
+      })(req(), undefined),
+    ).rejects.toBe(signal);
+  });
+
   it("runs the Origin check before the handler when mutating", async () => {
     const inner = vi.fn(async () => ok({}));
     const wrapped = handle(inner, { mutating: true });
