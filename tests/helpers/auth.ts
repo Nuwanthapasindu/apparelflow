@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import bcrypt from "bcryptjs";
 import type { Role } from "@/generated/prisma/client";
+import { hashPassword } from "@/lib/auth/password-hash";
 import { signAccessToken } from "@/lib/auth/tokens";
 import { prisma } from "./db";
 
-// Cost 4 keeps the suite fast; the app uses cost 10 and bcrypt.compare handles any cost.
-const TEST_COST = 4;
+// Cheap parameters keep the suite fast. The parameters live inside each hash, so verification of
+// these test hashes goes through exactly the same code as production hashes.
+const TEST_HASH = { memoryCost: 1024, timeCost: 1 };
 
 export const DEMO = {
   supervisor: { role: "cutting_supervisor", email: "cutting.supervisor@apparelflow.test", password: "Demo-Supervisor-1", fullName: "Cutting Supervisor" },
@@ -21,7 +22,7 @@ export async function seedDemoUsers() {
   for (const key of Object.keys(DEMO) as DemoKey[]) {
     const d = DEMO[key];
     const user = await prisma.user.create({
-      data: { email: d.email, passwordHash: await bcrypt.hash(d.password, TEST_COST), role: d.role, fullName: d.fullName },
+      data: { email: d.email, passwordHash: await hashPassword(d.password, TEST_HASH), role: d.role, fullName: d.fullName },
     });
     users[key] = { id: user.id, email: d.email, password: d.password };
   }
@@ -34,7 +35,7 @@ export async function makeUser(role: Role, overrides: { isActive?: boolean; pass
   const user = await prisma.user.create({
     data: {
       email: `${role}-${randomUUID().slice(0, 8)}@test.local`,
-      passwordHash: await bcrypt.hash(password, TEST_COST),
+      passwordHash: await hashPassword(password, TEST_HASH),
       role,
       fullName: `Test ${role}`,
       isActive: overrides.isActive ?? true,

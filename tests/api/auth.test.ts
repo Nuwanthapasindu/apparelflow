@@ -1,6 +1,6 @@
 import { SignJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import bcrypt from "bcryptjs";
+import * as argon2 from "argon2";
 import { GET as meRoute } from "@/app/api/me/route";
 import * as loginModule from "@/app/api/auth/login/route";
 import * as logoutModule from "@/app/api/auth/logout/route";
@@ -9,12 +9,10 @@ import { hashToken, signAccessToken } from "@/lib/auth/tokens";
 import { cookieHeader, DEMO, makeUser, seedDemoUsers, setCookies, type DemoKey } from "../helpers/auth";
 import { prisma } from "../helpers/db";
 
-// Spy on bcrypt.compare without replacing it (A19). The module namespace itself cannot be spied on.
-vi.mock("bcryptjs", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("bcryptjs")>();
-  const compare = vi.fn(mod.default.compare);
-  const hash = vi.fn(mod.default.hash);
-  return { ...mod, compare, hash, default: { ...mod.default, compare, hash } };
+// Spy on argon2.verify without replacing it, to assert when a password check does and does not run.
+vi.mock("argon2", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("argon2")>();
+  return { ...mod, verify: vi.fn(mod.verify) };
 });
 
 const BASE = "http://localhost:3000";
@@ -147,17 +145,17 @@ describe("login", () => {
   });
 
   it("an unknown email is rejected without any password hashing; a known email is checked against its real hash", async () => {
-    const compare = vi.mocked(bcrypt.compare);
-    compare.mockClear();
+    const verify = vi.mocked(argon2.verify);
+    verify.mockClear();
     const unknown = await login("nobody@apparelflow.test", "whatever-123");
     expect(unknown.status).toBe(401);
-    expect(compare).not.toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
 
     // Known email: the typed password is compared with that user's stored hash, nothing else.
     const stored = (await prisma.user.findUniqueOrThrow({ where: { email: DEMO.supervisor.email } })).passwordHash;
     await login(DEMO.supervisor.email, "wrong-password");
-    expect(compare).toHaveBeenCalledTimes(1);
-    expect(compare).toHaveBeenCalledWith("wrong-password", stored);
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(verify).toHaveBeenCalledWith(stored, "wrong-password"); // the stored Argon2id hash first, then what was typed
   });
 
   it("a known but inactive user is still rejected (after the password check)", async () => {
