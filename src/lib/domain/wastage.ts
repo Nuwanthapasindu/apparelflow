@@ -2,9 +2,9 @@ import { Prisma } from "@/generated/prisma/client";
 
 export type WastageInput = {
   targetQty: number;
-  stdFabricYards: Prisma.Decimal.Value;
-  actualFabricYards: Prisma.Decimal.Value;
-  wastageCapPct: Prisma.Decimal.Value;
+  stdFabricYards: string | number | Prisma.Decimal;
+  actualFabricYards: string | number | Prisma.Decimal;
+  wastageCapPct: string | number | Prisma.Decimal;
 };
 
 export type WastageProjection = {

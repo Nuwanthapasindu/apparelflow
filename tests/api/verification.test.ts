@@ -192,10 +192,10 @@ describe("approve", () => {
   });
 
   it("V38: unsupported order and log mutation methods are not exported", () => {
-    for (const module of [orderByIdModule, approveModule, rejectModule]) {
-      expect(module).not.toHaveProperty("PUT");
-      expect(module).not.toHaveProperty("PATCH");
-      expect(module).not.toHaveProperty("DELETE");
+    for (const routeModule of [orderByIdModule, approveModule, rejectModule]) {
+      expect(routeModule).not.toHaveProperty("PUT");
+      expect(routeModule).not.toHaveProperty("PATCH");
+      expect(routeModule).not.toHaveProperty("DELETE");
     }
   });
 });
