@@ -57,3 +57,12 @@ export async function apiFetch<T>(path: string, init: { method?: string; body?: 
   }
   return payload?.data as T;
 }
+
+/**
+ * Navigate with a full page load instead of the client-side router. Used when the signed-in user
+ * changes (sign out, role switch): a client-side navigation would leave the previous user's page
+ * data in this tab's memory, and the next person at a shared terminal could read it.
+ */
+export function hardNavigate(path: string): void {
+  window.location.assign(new URL(path, window.location.origin).toString());
+}

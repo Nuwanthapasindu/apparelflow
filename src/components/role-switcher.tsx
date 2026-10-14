@@ -1,8 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
-import { apiFetch } from "@/lib/client/api";
+import { apiFetch, hardNavigate } from "@/lib/client/api";
 import type { DemoPersona } from "@/lib/demo";
 import { LANDING } from "@/lib/nav";
 import { SpinnerIcon } from "./icons";
@@ -12,12 +11,12 @@ import { SpinnerIcon } from "./icons";
  * current session family) and signs in again as the chosen persona through the real endpoints.
  */
 export function RoleSwitcher({ personas, currentEmail }: { personas: DemoPersona[]; currentEmail: string }) {
-  const router = useRouter();
   const selectId = useId();
   const [target, setTarget] = useState<DemoPersona | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // An async transition stays pending through logout, login and the navigation, until the new page renders.
-  const [switching, startTransition] = useTransition();
+  const [leaving, setLeaving] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const switching = pending || leaving;
 
   function switchTo(email: string) {
     const persona = personas.find((p) => p.email === email);
@@ -38,13 +37,14 @@ export function RoleSwitcher({ personas, currentEmail }: { personas: DemoPersona
         await apiFetch("/api/auth/login", { method: "POST", body: { email: persona.email, password: persona.password } });
       } catch {
         // Signed out, but the new sign-in failed: do not leave the user on a dead session.
-        router.replace("/login?reason=switch-failed");
-        router.refresh();
+        setLeaving(true);
+        hardNavigate("/login?reason=switch-failed");
         return;
       }
 
-      router.push(LANDING[persona.role]);
-      router.refresh();
+      // Full page load so nothing from the previous role's pages survives in this tab's memory.
+      setLeaving(true);
+      hardNavigate(LANDING[persona.role]);
     });
   }
 

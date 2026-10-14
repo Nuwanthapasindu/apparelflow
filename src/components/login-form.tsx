@@ -16,6 +16,7 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
   const ids = { email: useId(), password: useId(), error: useId() };
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const inFlight = useRef(false); // synchronous guard: state alone cannot stop two clicks in one tick
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,6 +25,8 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
   const [busy, setBusy] = useState<string | null>(null); // "manual" or a persona key
 
   async function signIn(credentials: { email: string; password: string }, who: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(who);
     setFormError(null);
     try {
@@ -31,6 +34,7 @@ export function LoginForm({ personas, notice }: { personas: DemoPersona[]; notic
       router.replace(LANDING[user.role]);
       router.refresh();
     } catch (e) {
+      inFlight.current = false;
       setBusy(null);
       if (e instanceof ApiClientError && e.status === 401) setFormError("Invalid email or password");
       else if (e instanceof ApiClientError && e.status === 400) setFormError("Check the email and password and try again");
