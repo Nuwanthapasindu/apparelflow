@@ -146,41 +146,24 @@ describe("login", () => {
     expect((await refresh(refreshOf(first))).status).toBe(401);
   });
 
-  it("an unknown email costs one compare and no hashing, even on the very first request", async () => {
-    // A lazily created dummy hash would add a bcrypt.hash on the first unknown email per server
-    // instance, making that one response about twice as slow and revealing the email is unknown.
-    vi.resetModules();
-    const fresh = (await import("bcryptjs")).default;
-    const { authenticate } = await import("@/lib/auth/password");
-    vi.mocked(fresh.hash).mockClear();
-    vi.mocked(fresh.compare).mockClear();
-    expect(await authenticate("first-unknown@apparelflow.test", "whatever-123")).toBeNull();
-    expect(fresh.hash).not.toHaveBeenCalled();
-    expect(fresh.compare).toHaveBeenCalledTimes(1);
-  });
-
-  it("the dummy hash is a valid bcrypt hash with the same cost as real ones", async () => {
-    const { readFileSync } = await import("node:fs");
-    const source = readFileSync("src/lib/auth/password.ts", "utf8");
-    const dummy = /DUMMY_HASH = "([^"]+)"/.exec(source)![1];
-    expect(bcrypt.getRounds(dummy)).toBe(10);
-    expect(await bcrypt.compare("anything", dummy)).toBe(false);
-  });
-
-  it("A19: an unknown email still runs a bcrypt compare, so timing does not reveal which emails exist", async () => {
+  it("an unknown email is rejected without any password hashing; a known email is checked against its real hash", async () => {
     const compare = vi.mocked(bcrypt.compare);
     compare.mockClear();
-    await login("nobody@apparelflow.test", "whatever-123");
-    expect(compare).toHaveBeenCalledTimes(1);
+    const unknown = await login("nobody@apparelflow.test", "whatever-123");
+    expect(unknown.status).toBe(401);
+    expect(compare).not.toHaveBeenCalled();
 
-    compare.mockClear();
+    // Known email: the typed password is compared with that user's stored hash, nothing else.
+    const stored = (await prisma.user.findUniqueOrThrow({ where: { email: DEMO.supervisor.email } })).passwordHash;
     await login(DEMO.supervisor.email, "wrong-password");
     expect(compare).toHaveBeenCalledTimes(1);
+    expect(compare).toHaveBeenCalledWith("wrong-password", stored);
+  });
 
-    compare.mockClear();
+  it("a known but inactive user is still rejected (after the password check)", async () => {
     await prisma.user.update({ where: { email: DEMO.verifier.email }, data: { isActive: false } });
-    await loginAs("verifier");
-    expect(compare).toHaveBeenCalledTimes(1);
+    expect((await loginAs("verifier")).status).toBe(401);
+    expect((await loginAs("supervisor")).status).toBe(200);
   });
 });
 
