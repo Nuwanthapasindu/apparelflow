@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateWastage } from "@/lib/domain/wastage";
 import { evaluateCount } from "@/lib/domain/traffic-light";
-import { parseActualQtyText, rejectOrderSchema, saveCountsSchema } from "@/lib/validation/verification";
+import { hasVisibleCharacter, parseActualQtyText, rejectOrderSchema, saveCountsSchema } from "@/lib/validation/verification";
 
 describe("traffic-light evaluation", () => {
   it("U1: maps exact, excess, shortage, zero and large counts", () => {
@@ -56,6 +56,23 @@ describe("fabric wastage", () => {
 describe("verification request validation", () => {
   it.each(["", " ", "\n\t", "x".repeat(1_001), "bad\u0000note", 5])("U8: rejects note %j", (note) => {
     expect(rejectOrderSchema.safeParse({ note }).success).toBe(false);
+  });
+
+  it.each([
+    ["next line", String.fromCodePoint(0x85)],
+    ["zero-width space", String.fromCodePoint(0x200b)],
+    ["zero-width joiner and word joiner", String.fromCodePoint(0x200d, 0x2060)],
+    ["byte order mark", String.fromCodePoint(0xfeff)],
+    ["soft hyphen", String.fromCodePoint(0xad)],
+  ])("U8: rejects a note of only %s", (_label, note) => {
+    expect(rejectOrderSchema.safeParse({ note }).success).toBe(false);
+    expect(hasVisibleCharacter(note)).toBe(false);
+  });
+
+  it("keeps a note with a real character between invisible ones", () => {
+    const note = `${String.fromCodePoint(0x200b)}Seam open${String.fromCodePoint(0x200b)}`;
+    expect(hasVisibleCharacter(note)).toBe(true);
+    expect(rejectOrderSchema.parse({ note }).note).toContain("Seam open");
   });
 
   it("trims a valid rejection note", () => {

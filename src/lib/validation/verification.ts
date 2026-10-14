@@ -14,6 +14,11 @@ export function parseActualQtyText(text: string): { value: number } | { error: s
   return { value };
 }
 
+// Mirrors the database CHECK on verification_logs.rejection_note: a note needs at least one character
+// that is not whitespace and not an invisible one (NEL, zero-width, BOM, soft hyphen). trim() alone misses those.
+const INVISIBLE_ONLY = /^[\s\u0085\u00ad\u180e\u200b-\u200f\u2028-\u202f\u205f-\u2064\u3164\ufeff]*$/;
+export const hasVisibleCharacter = (text: string) => !INVISIBLE_ONLY.test(text);
+
 const componentId = z.string().uuid("Choose a valid component");
 
 export const orderActionParamsSchema = z.strictObject({
@@ -57,6 +62,7 @@ export const rejectOrderSchema = z.strictObject({
       z
         .string()
         .min(1, "Enter a rejection reason")
+        .refine(hasVisibleCharacter, "Enter a rejection reason")
         .max(REJECTION_NOTE_MAX, `Use ${REJECTION_NOTE_MAX} characters or fewer`)
         .refine((value) => !value.includes("\u0000"), "The rejection reason contains an unsupported character"),
     ),

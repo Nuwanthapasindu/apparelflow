@@ -12,7 +12,8 @@ async function readObject(request: Request, allowEmpty: boolean): Promise<Record
     throw errors.validation({}, "A JSON request body is required");
   }
   if (text.length > MAX_BODY_BYTES) throw errors.validation({}, "The request body is too large");
-  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+  const mediaType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+  if (mediaType !== "application/json") {
     throw errors.validation({}, "Content-Type must be application/json");
   }
 

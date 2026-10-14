@@ -25,6 +25,16 @@ beforeEach(async () => {
   ctx = await setupVerification();
 });
 
+// Characters that look blank but are not matched by trim(); the database CHECK rejects them too.
+const INVISIBLE_ONLY_NOTES = [
+  String.fromCodePoint(0x85),
+  String.fromCodePoint(0x200b),
+  String.fromCodePoint(0x200d, 0x2060),
+  String.fromCodePoint(0xfeff),
+  String.fromCodePoint(0xad),
+  ` ${String.fromCodePoint(0x200b)}\t${String.fromCodePoint(0xfeff)} `,
+];
+
 describe("PUT counts", () => {
   it("V1: unauthenticated, supervisor and sewing requests are 401 / 403 / 403", async () => {
     const order = await createPending(ctx);
@@ -109,6 +119,10 @@ describe("PUT counts", () => {
     const id = order.items[0].componentId;
     expect((await saveCountsRequest(order.id, ctx.users.verifier.id, "{bad")).status).toBe(400);
     expect((await saveCountsRequest(order.id, ctx.users.verifier.id, JSON.stringify({ counts: [{ componentId: id, actualQty: 1 }] }), { "content-type": "text/plain" })).status).toBe(400);
+    // The media type must be exactly application/json, not merely mention it.
+    const body = JSON.stringify({ counts: [{ componentId: id, actualQty: 1 }] });
+    expect((await saveCountsRequest(order.id, ctx.users.verifier.id, body, { "content-type": "text/plain; x=application/json" })).status).toBe(400);
+    expect((await saveCountsRequest(order.id, ctx.users.verifier.id, body, { "content-type": "Application/JSON; charset=utf-8" })).status).toBe(200);
     const foreign = await saveCountsRequest(order.id, ctx.users.verifier.id, { counts: [{ componentId: id, actualQty: 1 }] }, { origin: "https://evil.example" });
     expect(foreign.status).toBe(403);
     expect((await foreign.json()).error.code).toBe("CSRF_ORIGIN");
@@ -209,6 +223,17 @@ describe("reject and resubmit", () => {
       expect(response.status).toBe(400);
       expect((await response.json()).error.fields.note).toEqual(expect.any(String));
     }
+  });
+
+  it("V40: a note made only of invisible characters is a 400 with fields.note, not a database error", async () => {
+    const order = await createPending(ctx);
+    for (const note of INVISIBLE_ONLY_NOTES) {
+      const response = await rejectRequest(order.id, ctx.users.verifier.id, { note });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.fields?.note).toEqual(expect.any(String));
+    }
+    expect(await prisma.verificationLog.count({ where: { orderId: order.id } })).toBe(0);
+    expect((await prisma.cuttingOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("PENDING_VERIFICATION");
   });
 
   it("V41, V42, V45 and V46: valid plain-text note rejects regardless of counts and freezes evidence", async () => {
