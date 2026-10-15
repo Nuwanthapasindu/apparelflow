@@ -173,5 +173,3 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 - A stale verifier tab from an earlier attempt can save counts onto a resubmitted attempt (approval still judges the stored counts under a lock, so the hard stop holds).
 - The Prisma transaction time limit is the default; under extreme contention a waiting request fails with a generic 500 instead of a 409.
 - A free-tier database may pause, and the tests need a local Postgres (see above).
-
-See [AI_OPTIMIZATION_REPORT.md](AI_OPTIMIZATION_REPORT.md) for how AI was used, what it got wrong and how the defences were built.
