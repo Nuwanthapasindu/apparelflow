@@ -1,8 +1,8 @@
 // Prepares the TEST database for the Playwright run: guard, migrate, seed, then remove leftover orders.
 // Run through `yarn e2e` (which loads .env.test). Refuses anything that is not a local test database.
 import { execFileSync } from "node:child_process";
-import { assertTestDatabase } from "../tests/helpers/assert-test-database";
-import { PrismaClient } from "../src/generated/prisma/client";
+import { assertTestDatabase } from "../helpers/assert-test-database";
+import { PrismaClient } from "../../src/generated/prisma/client";
 
 if (process.env.BASE_URL) {
   console.log(`BASE_URL is set (${process.env.BASE_URL}): skipping local database preparation.`);
