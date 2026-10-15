@@ -60,6 +60,16 @@ export const AlertIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M10 8v4M10 14.2v.1" />
   </Icon>
 );
+export const CircleDashedIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p} strokeDasharray="3 3">
+    <circle cx="10" cy="10" r="7.5" />
+  </Icon>
+);
+export const RefreshIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M16 6V2.5L13.5 5A7 7 0 1 0 17 11" />
+  </Icon>
+);
 export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <circle cx="10" cy="7" r="3" />

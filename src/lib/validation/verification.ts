@@ -3,6 +3,16 @@ import { z } from "zod";
 export const ACTUAL_QTY_MAX = 10_000_000;
 export const COUNTS_MAX = 50;
 export const REJECTION_NOTE_MAX = 1_000;
+const ACTUAL_QTY_TEXT = /^\d{1,8}$/;
+
+export function parseActualQtyText(text: string): { value: number } | { error: string } {
+  if (!ACTUAL_QTY_TEXT.test(text)) return { error: `Enter a whole number from 0 to ${ACTUAL_QTY_MAX.toLocaleString("en-US")}` };
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value > ACTUAL_QTY_MAX) {
+    return { error: `Enter a whole number from 0 to ${ACTUAL_QTY_MAX.toLocaleString("en-US")}` };
+  }
+  return { value };
+}
 
 const componentId = z.string().uuid("Choose a valid component");
 

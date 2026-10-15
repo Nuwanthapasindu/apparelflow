@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateWastage } from "@/lib/domain/wastage";
 import { evaluateCount } from "@/lib/domain/traffic-light";
-import { rejectOrderSchema, saveCountsSchema } from "@/lib/validation/verification";
+import { parseActualQtyText, rejectOrderSchema, saveCountsSchema } from "@/lib/validation/verification";
 
 describe("traffic-light evaluation", () => {
   it("U1: maps exact, excess, shortage, zero and large counts", () => {
@@ -65,5 +65,13 @@ describe("verification request validation", () => {
   it("rejects duplicate component ids", () => {
     const componentId = "00000000-0000-4000-8000-000000000001";
     expect(saveCountsSchema.safeParse({ counts: [{ componentId, actualQty: 1 }, { componentId, actualQty: 2 }] }).success).toBe(false);
+  });
+
+  it("uses the same whole-number count rule for live UI input", () => {
+    expect(parseActualQtyText("0")).toEqual({ value: 0 });
+    expect(parseActualQtyText("10000000")).toEqual({ value: 10_000_000 });
+    for (const text of ["", "-1", "1.5", "1e3", "abc", "10000001"]) {
+      expect(parseActualQtyText(text)).toEqual({ error: expect.any(String) });
+    }
   });
 });
