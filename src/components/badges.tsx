@@ -1,6 +1,6 @@
 import type { OrderStatus, Role } from "@/generated/prisma/enums";
 import { ROLE_LABEL } from "@/lib/nav";
-import { CheckCircleIcon, ClockIcon, PlayIcon, ScissorsIcon, UserIcon, XCircleIcon } from "./icons";
+import { CheckCircleIcon, ClockIcon, PlayIcon, RefreshIcon, ScissorsIcon, UserIcon, XCircleIcon } from "./icons";
 
 // The status badge convention reused on later days. Colour is never the only signal: every status
 // has an icon and a text label. Pure GREEN/YELLOW/RED are reserved for component traffic lights.
@@ -35,6 +35,16 @@ export function RoleBadge({ role }: { role: Role }) {
     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-900">
       <UserIcon />
       {ROLE_LABEL[role]}
+    </span>
+  );
+}
+
+/** Shown when the attempt being verified or released is a re-cut. Blue: red and amber are reserved. */
+export function RecutBadge({ attemptNo }: { attemptNo: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-blue-700 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-950">
+      <RefreshIcon />
+      Re-cut #{attemptNo}
     </span>
   );
 }

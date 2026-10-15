@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ApiClientError, apiFetch } from "@/lib/client/api";
 import { formatDateTime, formatInt } from "@/lib/format";
 import type { OrderListItemDto } from "@/lib/services/order-dto";
+import { RecutBadge } from "./badges";
 import { AlertIcon, CheckCircleIcon, ClockIcon, RefreshIcon, SpinnerIcon } from "./icons";
 
 type QueuePayload = { orders: OrderListItemDto[]; hasMore: boolean };
@@ -120,7 +121,7 @@ export function VerifierQueue({
                       <h2 className="mt-1 font-mono text-2xl font-black text-blue-900 group-hover:underline">{order.orderNo}</h2>
                     </div>
                     {order.currentAttempt > 1 && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-700 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-950"><RefreshIcon />Re-cut #{order.currentAttempt}</span>
+                      <RecutBadge attemptNo={order.currentAttempt} />
                     )}
                   </div>
                   <p className="mt-3 text-lg font-bold">{order.recipe.name}</p>

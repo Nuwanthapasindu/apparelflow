@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
@@ -24,6 +23,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
       DIRECT_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
+      # Build-time placeholder (test value only, no real secret). The runtime secret lives in Vercel.
+      JWT_SECRET: ci-only-throwaway-secret-0123456789abcdef
 
     # Throwaway Postgres for the database trigger tests. Never Supabase.
     services:
@@ -44,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 24 is the current LTS line.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -77,7 +79,7 @@ jobs:
         run: yarn tsc --noEmit
 
       - name: Apply migrations to the test database
-        run: yarn db:migrate:test
+        run: yarn test:db:migrate
 
       - name: Run tests
         run: yarn test

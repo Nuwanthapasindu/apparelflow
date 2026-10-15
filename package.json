@@ -10,7 +10,10 @@
     "build": "prisma generate && next build",
     "test": "dotenv -e .env.test -- vitest run",
     "test:watch": "dotenv -e .env.test -- vitest",
-    "db:migrate:test": "dotenv -e .env.test -- prisma migrate deploy"
+    "e2e": "dotenv -e .env.test -- sh -c 'tsx tests/e2e/prepare.ts && playwright test'",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:db:down": "docker compose -f docker-compose.test.yml down",
+    "test:db:migrate": "dotenv -e .env.test -- prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "6",
@@ -23,6 +26,8 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -1,5 +1,5 @@
 import type { ItemStatus } from "@/generated/prisma/enums";
-import { AlertIcon, CheckCircleIcon, CircleDashedIcon, XCircleIcon } from "./icons";
+import { AlertIcon, CheckCircleIcon, CircleDashedIcon, PercentIcon, XCircleIcon } from "./icons";
 
 const TRAFFIC = {
   GREEN: { label: "MATCH", Icon: CheckCircleIcon, style: "border-green-700 bg-green-100 text-green-950" },
@@ -21,7 +21,7 @@ export function TrafficBadge({ status }: { status: ItemStatus | null }) {
 export function OverCapBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-700 bg-amber-100 px-2.5 py-1 text-xs font-bold tracking-wide text-amber-950">
-      <AlertIcon />
+      <PercentIcon />
       OVER CAP
     </span>
   );

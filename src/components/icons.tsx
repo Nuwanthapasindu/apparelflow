@@ -76,6 +76,13 @@ export const UserIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 17c.8-3 3-4.5 6-4.5s5.2 1.5 6 4.5" />
   </Icon>
 );
+export const PercentIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M16 4 4 16" />
+    <circle cx="6" cy="6" r="2" />
+    <circle cx="14" cy="14" r="2" />
+  </Icon>
+);
 export const SpinnerIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p} className="motion-safe:animate-spin">
     <path d="M10 2.5a7.5 7.5 0 1 0 7.5 7.5" />

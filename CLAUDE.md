@@ -12,7 +12,9 @@ ApparelFlow ERP: Cutting Gatekeeper. Webtezza (Pvt) Ltd Software Engineering Int
 - **Day 2 (auth, orders): done.** Custom JWT + rotating refresh auth, Role Switcher, order creation engine (`/api/recipes`, `/api/orders`), login page, role-based shell, orders list, creation modal, order detail. The `order_no_sequence` migration must be applied to Supabase before the deployed app can create orders.
 - **Day 3 (verifier gatekeeper): done locally.** Verifier queue and count workspace, row-locked approve/reject/resubmit services, server-side 422 hard stop, immutable decision history and fabric wastage snapshots. The `widen_wastage_pct` migration must be applied to Supabase before deployment.
 - **Guard gaps closed:** migration `fix_gatekeeper_guard_gaps` makes the approval guard count only items that match the order's recipe components, makes items validate recipe/name/expected quantity on insert, rejects whitespace-only rejection notes, requires an *active* sewing supervisor to start sewing, and makes the batch definition immutable (fabric yards editable only while `REJECTED`).
-- **Not started:** Day 4 (sewing queue, Start Sewing, brief Test 5, final README and AI report polish). `/sewing` remains a placeholder. **Update this section as each milestone lands.**
+- **Day 4 (sewing release): done locally.** `listSewingQueue` is the single constant-filtered query behind `GET /api/sewing/queue`, the `/sewing` page and brief Test 5; `GET /api/sewing/active`, `GET /api/sewing/:id`, `POST /api/sewing/:id/start` (guarded transition, database-clock timestamp); sewing board and detail pages; RBAC matrix and full-flow tests; Playwright specs in `tests/e2e` (`yarn e2e`); README. Before deploying, apply the pending `widen_wastage_pct` migration to Supabase by hand (`yarn prisma migrate deploy`); it is not applied there yet.
+
+**Update this section as each milestone lands.**
 
 ## Source of truth (highest first)
 
@@ -43,7 +45,8 @@ yarn lint                       # eslint (flat config: next core-web-vitals + ty
 yarn tsc --noEmit               # type-check (no script defined); run `yarn next typegen` first on a clean checkout
 yarn test                       # vitest against the LOCAL test Postgres (loads .env.test, aborts if the DB is not local and named *test*)
 yarn test tests/api/orders.test.ts   # one file (always go through `yarn test`, never bare `vitest`)
-yarn db:migrate:test            # apply migrations to the test database
+yarn test:db:up                 # start the throwaway Postgres 16 on port 5433 (docker-compose.test.yml)
+yarn test:db:migrate            # apply migrations to the test database (needs .env.test: cp .env.test.example .env.test)
 yarn prisma validate            # must pass before every push
 yarn prisma generate            # regenerate the client into src/generated/prisma
 yarn prisma migrate dev --name <change>
