@@ -4,7 +4,7 @@
 
 A cutting-floor terminal for ApparelFlow ERP. A Cutting Supervisor creates a cutting order, a Cutting Verifier counts every component and signs it off, and only then can the batch reach the Sewing Supervisor's queue. The hard stop (no RED, missing or uncounted component can be approved) is enforced in the API **and** in PostgreSQL by triggers, not only in the UI. Built with Next.js 16 (App Router, Cache Components), React 19, TypeScript, Prisma 6, PostgreSQL on Supabase (used as plain Postgres), Zod, `jose`, Argon2id, Tailwind v4 and Vitest.
 
-**Live URL:** [https://apparelflow-beryl.vercel.app/](https://apparelflow-indol.vercel.app/)
+**Live URL:** [https://peaceful-bavarois-ee17c0.netlify.app/](https://peaceful-bavarois-ee17c0.netlify.app/)
 
 ## Evaluator quick path
 
@@ -144,7 +144,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 
 - Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` in Vercel. Choose the Vercel region closest to the Supabase region.
 - Migrations are **not** run by the Vercel build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`). `postinstall` runs `prisma generate` so the git-ignored client exists on Vercel.
-- Next's file tracing includes the Prisma engine from the custom output directory in every API route (checked in the build output); the engine for Vercel's platform is generated during its own build.
+- Next's file tracing includes the Linux Prisma engine in every server route (`outputFileTracingIncludes`), and `src/lib/db.ts` copies it to `/tmp/prisma-engines` on a cold start, because the bundler rewrites the generated client's directory to a path that does not exist in a serverless function. The generator lists `rhel-openssl-3.0.x` in `binaryTargets`.
 - A free-tier Supabase project can pause when inactive: open its dashboard before using the live demo.
 - Orders created while testing stay in the database; remove them in the Supabase SQL editor if you want a clean board.
 
