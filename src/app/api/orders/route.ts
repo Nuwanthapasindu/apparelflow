@@ -18,7 +18,7 @@ export const POST = handle(
 );
 
 export const GET = handle(async (request) => {
-  const user = await requireRole(request, "cutting_supervisor");
+  const user = await requireRole(request, "cutting_supervisor", "cutting_verifier");
   const query = parseListOrdersQuery(new URL(request.url).searchParams);
   return ok(await listOrders(user, query));
 });
