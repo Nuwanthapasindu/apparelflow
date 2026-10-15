@@ -26,8 +26,8 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          // The demo flag is read at build time, so the build happens here, with the test database env.
-          command: `NEXT_PUBLIC_DEMO_MODE=true next build && next start -p ${PORT}`,
+          // Build here, with the test database env, so the app under test is the production build.
+          command: `next build && next start -p ${PORT}`,
           url: `${baseURL}/login`,
           timeout: 240_000,
           reuseExistingServer: false,
