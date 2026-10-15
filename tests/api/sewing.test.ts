@@ -18,8 +18,11 @@ import {
   sewingActiveRequest,
   sewingDetailRequest,
   sewingQueueRequest,
+  sewingStartRequest,
   snapshotState,
 } from "../helpers/sewing";
+import { createRejected } from "../helpers/sewing";
+import { expectDbError } from "../helpers/db";
 
 let ctx: VerificationContext;
 beforeEach(async () => {
@@ -321,5 +324,142 @@ describe("sewing detail endpoint", () => {
   it("S20: the detail route exports GET only", async () => {
     const mod = await import("@/app/api/sewing/[id]/route");
     for (const method of ["PUT", "PATCH", "DELETE", "POST"]) expect(mod).not.toHaveProperty(method);
+  });
+});
+
+describe("start sewing endpoint", () => {
+  const stateOf = (id: string) => prisma.cuttingOrder.findUniqueOrThrow({ where: { id } });
+
+  it("S13: starting a VERIFIED order releases it, records the session user and the database clock", async () => {
+    const order = await createVerified(ctx);
+    const [{ now: before }] = await prisma.$queryRaw<{ now: Date }[]>`SELECT now() AS now`;
+    const res = await sewingStartRequest(order.id, ctx.users.sewing.id);
+    const [{ now: after }] = await prisma.$queryRaw<{ now: Date }[]>`SELECT now() AS now`;
+    expect(res.status).toBe(200);
+    const { order: started } = (await res.json()).data;
+    expect(started).toMatchObject({ id: order.id, status: "IN_SEWING", sewingStartedBy: { fullName: "Sewing Supervisor" } });
+
+    const stored = await stateOf(order.id);
+    expect(stored.status).toBe("IN_SEWING");
+    expect(stored.sewingStartedById).toBe(ctx.users.sewing.id);
+    expect(stored.sewingStartedAt).not.toBeNull();
+    expect(stored.sewingStartedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(stored.sewingStartedAt!.getTime()).toBeLessThanOrEqual(after.getTime());
+    expect(started.sewingStartedAt).toBe(stored.sewingStartedAt!.toISOString());
+    expect(JSON.stringify(started)).not.toContain(ctx.users.sewing.id);
+  });
+
+  it("S14: starting twice gives 409 the second time and records one start", async () => {
+    const order = await createVerified(ctx);
+    expect((await sewingStartRequest(order.id, ctx.users.sewing.id)).status).toBe(200);
+    const firstStart = (await stateOf(order.id)).sewingStartedAt;
+    const second = await sewingStartRequest(order.id, ctx.users.sewing.id);
+    expect(second.status).toBe(409);
+    expect((await second.json()).error.code).toBe("CONFLICT");
+    expect((await stateOf(order.id)).sewingStartedAt).toEqual(firstStart);
+  });
+
+  it("S15: five concurrent starts give one 200, four 409s and exactly one recorded start", async () => {
+    const order = await createVerified(ctx);
+    const responses = await Promise.all(Array.from({ length: 5 }, () => sewingStartRequest(order.id, ctx.users.sewing.id)));
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409]);
+    const stored = await stateOf(order.id);
+    expect(stored.status).toBe("IN_SEWING");
+    expect(stored.sewingStartedById).toBe(ctx.users.sewing.id);
+  });
+
+  it("S16: a pending or rejected order is a 404 and stays unchanged", async () => {
+    const pending = await createPending(ctx);
+    const rejected = await createRejected(ctx);
+    const before = await snapshotState();
+    for (const id of [pending.id, rejected.id, randomUUID()]) {
+      const res = await sewingStartRequest(id, ctx.users.sewing.id);
+      expect(res.status, id).toBe(404);
+    }
+    expect(await snapshotState()).toEqual(before);
+    expect((await stateOf(pending.id)).status).toBe("PENDING_VERIFICATION");
+    expect((await stateOf(rejected.id)).status).toBe("REJECTED");
+  });
+
+  it("S17: no session is 401, supervisor and verifier are 403 (even for an unknown id) and nothing changes", async () => {
+    const order = await createVerified(ctx);
+    const before = await snapshotState();
+    for (const id of [order.id, randomUUID()]) {
+      expect((await sewingStartRequest(id, null)).status).toBe(401);
+      expect((await sewingStartRequest(id, ctx.users.supervisor.id)).status).toBe(403);
+      expect((await sewingStartRequest(id, ctx.users.verifier.id)).status).toBe(403);
+    }
+    expect(await snapshotState()).toEqual(before);
+  });
+
+  it("S18: server-owned fields or any other body are a 400 and nothing changes", async () => {
+    const order = await createVerified(ctx);
+    const before = await snapshotState();
+    for (const body of [
+      { status: "IN_SEWING" },
+      { sewingStartedBy: ctx.users.supervisor.id },
+      { sewingStartedById: ctx.users.supervisor.id },
+      { sewingStartedAt: "2020-01-01T00:00:00Z" },
+      { anything: 1 },
+      [],
+      "x",
+    ]) {
+      const res = await sewingStartRequest(order.id, ctx.users.sewing.id, body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await snapshotState()).toEqual(before);
+    expect((await sewingStartRequest(order.id, ctx.users.sewing.id, {})).status).toBe(200);
+  });
+
+  it("S18b: a malformed id is a 400 before any lookup", async () => {
+    const before = await snapshotState();
+    for (const id of ["not-a-uuid", "queue", "12345"]) {
+      expect((await sewingStartRequest(id, ctx.users.sewing.id)).status, id).toBe(400);
+    }
+    expect(await snapshotState()).toEqual(before);
+  });
+
+  it("S19: after the start the order leaves the queue and appears in active with who and when", async () => {
+    const order = await createVerified(ctx);
+    expect((await queueOf(ctx.users.sewing.id)).orders.map((o) => o.id)).toEqual([order.id]);
+    expect((await sewingStartRequest(order.id, ctx.users.sewing.id)).status).toBe(200);
+    expect((await queueOf(ctx.users.sewing.id)).orders).toEqual([]);
+    const { orders } = await activeOf(ctx.users.sewing.id);
+    expect(orders.map((o) => o.id)).toEqual([order.id]);
+    expect(orders[0].sewingStartedBy).toEqual({ fullName: "Sewing Supervisor" });
+    expect(new Date(orders[0].sewingStartedAt!).getTime()).not.toBeNaN();
+  });
+
+  it("S20: only POST exists on the start route, and the database blocks IN_SEWING -> VERIFIED", async () => {
+    const mod = await import("@/app/api/sewing/[id]/start/route");
+    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) expect(mod).not.toHaveProperty(method);
+    const order = await createVerified(ctx);
+    await sewingStartRequest(order.id, ctx.users.sewing.id);
+    await expectDbError(prisma.$executeRaw`UPDATE cutting_orders SET status = 'VERIFIED' WHERE id = ${order.id}`, "GK409");
+    expect((await stateOf(order.id)).status).toBe("IN_SEWING");
+  });
+
+  it("S21: a foreign Origin is 403 CSRF_ORIGIN and nothing changes", async () => {
+    const order = await createVerified(ctx);
+    const res = await sewingStartRequest(order.id, ctx.users.sewing.id, {}, { origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("CSRF_ORIGIN");
+    expect((await stateOf(order.id)).status).toBe("VERIFIED");
+  });
+
+  it("a deactivated sewing supervisor cannot start sewing (401, the database guard is only a backstop)", async () => {
+    const order = await createVerified(ctx);
+    await prisma.user.update({ where: { id: ctx.users.sewing.id }, data: { isActive: false } });
+    expect((await sewingStartRequest(order.id, ctx.users.sewing.id)).status).toBe(401);
+    expect((await stateOf(order.id)).status).toBe("VERIFIED");
+  });
+
+  it("the recorded attempt is the approved one after a re-cut", async () => {
+    const { order } = await createRecutAndVerified(ctx);
+    const res = await sewingStartRequest(order.id, ctx.users.sewing.id);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(JSON.parse(text).data.order.attemptNo).toBe(2);
+    expect(text.toLowerCase()).not.toContain("reject");
   });
 });

@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { errors } from "@/lib/api/errors";
 import type { AuthUser } from "@/lib/auth/user";
 import { prisma } from "@/lib/db";
@@ -6,6 +7,7 @@ import type { SewingListQuery } from "@/lib/validation/sewing";
 import { isOrderId } from "@/lib/validation/order";
 import { SEWING_ORDER_SELECT, type SewingCardDto, type SewingDetailDto, toSewingCard, toSewingDetail } from "./sewing-dto";
 import { listSewingQueue } from "./sewing-queue";
+import { lockOrder } from "./verification";
 
 // Services take the authenticated user and re-assert the role, so a caller that forgets
 // requireRole still fails. The route handlers and the server-rendered pages both come through here.
@@ -53,16 +55,15 @@ export async function getSewingActive(user: AuthUser, query: SewingListQuery): P
   return listSewingActive(query);
 }
 
+type DetailClient = Pick<Prisma.TransactionClient, "cuttingOrder" | "verificationItem">;
+
 /**
  * One order for the sewing role. Scope is part of the query: only VERIFIED or IN_SEWING orders are
  * found, so a pending, rejected or unknown id is simply null and the caller answers 404, never
  * revealing that the order exists. Only the approved attempt's data is loaded.
  */
-export async function getSewingOrder(user: AuthUser, id: string): Promise<SewingDetailDto | null> {
-  assertSewing(user);
-  if (!isOrderId(id)) return null; // ids are UUIDs: anything else cannot exist (and a NUL byte would break Postgres)
-
-  const row = await prisma.cuttingOrder.findFirst({
+async function loadSewingDetail(client: DetailClient, id: string): Promise<SewingDetailDto | null> {
+  const row = await client.cuttingOrder.findFirst({
     where: { id, status: { in: ["VERIFIED", "IN_SEWING"] } },
     select: SEWING_ORDER_SELECT,
   });
@@ -70,10 +71,43 @@ export async function getSewingOrder(user: AuthUser, id: string): Promise<Sewing
   const approved = row.logs.find((log) => log.attemptNo === row.currentAttempt);
   if (!approved) return null;
 
-  const items = await prisma.verificationItem.findMany({
+  const items = await client.verificationItem.findMany({
     where: { orderId: id, attemptNo: approved.attemptNo },
     orderBy: { componentName: "asc" },
     select: { componentName: true, expectedQty: true, actualQty: true, status: true },
   });
   return toSewingDetail(row, items);
+}
+
+export async function getSewingOrder(user: AuthUser, id: string): Promise<SewingDetailDto | null> {
+  assertSewing(user);
+  if (!isOrderId(id)) return null; // ids are UUIDs: anything else cannot exist (and a NUL byte would break Postgres)
+  return loadSewingDetail(prisma, id);
+}
+
+/**
+ * Release a verified batch to the line. Lock the order row first (same lock order as every Day 3
+ * mutation), then a guarded update: the WHERE clause only matches a VERIFIED order and exactly one
+ * row must change. The starter comes from the session and the time from the database clock, never
+ * from the request. The Day 1 triggers are the backstop for the role (GK403) and the field rules.
+ */
+export async function startSewing(user: AuthUser, id: string): Promise<SewingDetailDto> {
+  assertSewing(user);
+  if (!isOrderId(id)) throw errors.notFound("Order not found");
+
+  return prisma.$transaction(async (tx) => {
+    const order = await lockOrder(tx, id); // 404 when missing
+    if (order.status === "IN_SEWING") throw errors.conflict("This batch is already in sewing");
+    if (order.status !== "VERIFIED") throw errors.notFound("Order not found"); // pending or rejected: not visible to sewing
+
+    const changed = await tx.$executeRaw`
+      UPDATE cutting_orders
+      SET status = 'IN_SEWING', sewing_started_by = ${user.id}, sewing_started_at = now(), updated_at = now()
+      WHERE id = ${id} AND status = 'VERIFIED'`;
+    if (changed !== 1) throw errors.conflict("This batch is no longer waiting for sewing");
+
+    const detail = await loadSewingDetail(tx, id);
+    if (!detail) throw errors.internal();
+    return detail;
+  });
 }

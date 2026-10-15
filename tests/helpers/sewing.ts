@@ -1,5 +1,6 @@
 import * as activeRoute from "@/app/api/sewing/active/route";
 import * as detailRoute from "@/app/api/sewing/[id]/route";
+import * as startRoute from "@/app/api/sewing/[id]/start/route";
 import * as queueRoute from "@/app/api/sewing/queue/route";
 import { prisma } from "./db";
 import { as } from "./orders";
@@ -24,6 +25,9 @@ export const sewingActiveRequest = async (userId: string | null, query = "") =>
 
 export const sewingDetailRequest = async (id: string, userId: string | null) =>
   detailRoute.GET(await as(userId, "GET", `/api/sewing/${encodeURIComponent(id)}`), { params: Promise.resolve({ id }) });
+
+export const sewingStartRequest = async (id: string, userId: string | null, body?: unknown, headers?: Record<string, string>) =>
+  startRoute.POST(await as(userId, "POST", `/api/sewing/${encodeURIComponent(id)}/start`, { body, headers }), { params: Promise.resolve({ id }) });
 
 /** An order that went through the real legal path: created, fully counted, approved. */
 export async function createVerified(ctx: VerificationContext, overrides: Overrides = {}): Promise<Pending> {
@@ -54,16 +58,14 @@ export async function createRecutAndVerified(ctx: VerificationContext, note = "S
   return { order, note };
 }
 
-/** One order in each status. IN_SEWING is set directly until the start endpoint exists. */
+/** One order in each status. IN_SEWING is reached through the real start endpoint. */
 export async function createOneOfEachStatus(ctx: VerificationContext) {
   const pending = await createPending(ctx);
   const rejected = await createRejected(ctx);
   const verified = await createVerified(ctx);
   const inSewing = await createVerified(ctx);
-  await prisma.cuttingOrder.update({
-    where: { id: inSewing.id },
-    data: { status: "IN_SEWING", sewingStartedById: ctx.users.sewing.id, sewingStartedAt: new Date() },
-  });
+  const started = await sewingStartRequest(inSewing.id, ctx.users.sewing.id);
+  if (started.status !== 200) throw new Error(`fixture: start failed (${started.status})`);
   return { pending, rejected, verified, inSewing };
 }
 
