@@ -9,6 +9,8 @@ generator client {
   output   = "../src/generated/prisma"
   // Vercel runs on Linux; without this only the local machine's engine is generated.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // One SQL statement for a query with nested relations instead of one per relation (fewer round trips).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
