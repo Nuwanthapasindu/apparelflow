@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { MAX_LIMIT } from "@/lib/validation/order-query";
 import type { SewingListQuery } from "@/lib/validation/sewing";
 import { isOrderId } from "@/lib/validation/order";
+import { readAfterCommit } from "./after-commit";
 import { SEWING_ORDER_SELECT, type SewingCardDto, type SewingDetailDto, toSewingCard, toSewingDetail } from "./sewing-dto";
 import { listSewingQueue } from "./sewing-queue";
 import { lockOrder } from "./verification";
@@ -66,6 +67,7 @@ async function loadSewingDetail(client: DetailClient, id: string): Promise<Sewin
   const row = await client.cuttingOrder.findFirst({
     where: { id, status: { in: ["VERIFIED", "IN_SEWING"] } },
     select: SEWING_ORDER_SELECT,
+    relationLoadStrategy: "join",
   });
   if (!row) return null;
   const approved = row.logs.find((log) => log.attemptNo === row.currentAttempt);
@@ -95,7 +97,7 @@ export async function startSewing(user: AuthUser, id: string): Promise<SewingDet
   assertSewing(user);
   if (!isOrderId(id)) throw errors.notFound("Order not found");
 
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const order = await lockOrder(tx, id); // 404 when missing
     if (order.status === "IN_SEWING") throw errors.conflict("This batch is already in sewing");
     if (order.status !== "VERIFIED") throw errors.notFound("Order not found"); // pending or rejected: not visible to sewing
@@ -105,9 +107,10 @@ export async function startSewing(user: AuthUser, id: string): Promise<SewingDet
       SET status = 'IN_SEWING', sewing_started_by = ${user.id}, sewing_started_at = now(), updated_at = now()
       WHERE id = ${id} AND status = 'VERIFIED'`;
     if (changed !== 1) throw errors.conflict("This batch is no longer waiting for sewing");
-
-    const detail = await loadSewingDetail(tx, id);
-    if (!detail) throw errors.internal();
-    return detail;
   });
+
+  // Read after the commit, so the transaction (and the row lock) stays short.
+  const detail = await readAfterCommit(() => loadSewingDetail(prisma, id));
+  if (!detail) throw errors.internal();
+  return detail;
 }

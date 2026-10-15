@@ -154,6 +154,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 - The live site runs on Netlify. Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432) and `JWT_SECRET` (32 or more random characters) as site environment variables. Choose the region closest to the Supabase region.
 - Migrations are **not** run by the host build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`), then `yarn prisma migrate status` should report the database is up to date. `postinstall` runs `prisma generate` so the git-ignored client exists on the host.
 - Next's file tracing includes the Linux Prisma engine in every server route (`outputFileTracingIncludes`), and `src/lib/db.ts` copies it to `/tmp/prisma-engines` on a cold start, because the bundler rewrites the generated client's directory to a path that does not exist in a serverless function. The generator lists `rhel-openssl-3.0.x` in `binaryTargets`.
+- Keep the host close to the database. The Supabase project is in Singapore (`ap-southeast-1`); each database statement from a function running on another continent costs hundreds of milliseconds, which is why a mutation sends at most 8 statements and keeps its transaction to about 6. If your host lets you pick the function region, choose one near the database.
 - A free-tier Supabase project can pause when inactive: open its dashboard before using the live demo.
 - Orders created while testing stay in the database; remove them in the Supabase SQL editor if you want a clean board.
 
@@ -180,7 +181,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 - Creating an order has no idempotency key; the UI blocks double submits, but a client that retries after a timeout can create a second order.
 - The lists have a `limit` of up to 100 and no paging controls.
 - A stale verifier tab from an earlier attempt can save counts onto a resubmitted attempt (approval still judges the stored counts under a lock, so the hard stop holds).
-- The Prisma transaction time limit is the default; under extreme contention a waiting request fails with a generic 500 instead of a 409.
+- Transactions are capped at 6 seconds (and 2 seconds to get a connection). Under extreme contention, or if the host is very far from the database, a request can still fail with a generic 500 instead of a 409. The mutations are kept to a handful of statements each (`tests/api/round-trips.test.ts` enforces a budget) because every statement is a network round trip.
 - A free-tier database may pause, and the tests need a local Postgres (see above).
 
 See [AI_OPTIMIZATION_REPORT.md](AI_OPTIMIZATION_REPORT.md) for how AI was used, what it got wrong and how the defences were built.

@@ -7,6 +7,7 @@ import { calculateWastage } from "@/lib/domain/wastage";
 import type { OrderDetailDto } from "@/lib/services/order-dto";
 import type { RejectOrderInput, SaveCountsInput } from "@/lib/validation/verification";
 import { isOrderId } from "@/lib/validation/order";
+import { readAfterCommit } from "./after-commit";
 import { getOrderDetailById } from "./order-detail";
 import { insertAttemptItems } from "./order-items";
 
@@ -38,8 +39,12 @@ const requireState = (order: LockedOrder, expected: OrderStatus) => {
   if (order.status !== expected) throw errors.conflict("This order is no longer in the required state");
 };
 
-async function detailAfterWrite(tx: Prisma.TransactionClient, orderId: string): Promise<OrderDetailDto> {
-  const detail = await getOrderDetailById(tx, orderId);
+/**
+ * The response body is read after the transaction commits, not inside it: the transaction (and its
+ * row lock) stays short, and a slow read can no longer make Prisma cancel the write (P2028).
+ */
+async function detailAfterCommit(orderId: string): Promise<OrderDetailDto> {
+  const detail = await readAfterCommit(() => getOrderDetailById(prisma, orderId));
   if (!detail) throw errors.internal();
   return detail;
 }
@@ -47,7 +52,7 @@ async function detailAfterWrite(tx: Prisma.TransactionClient, orderId: string): 
 export async function saveCounts(user: AuthUser, id: string, input: SaveCountsInput): Promise<OrderDetailDto> {
   assertVerifier(user);
   assertOrderId(id);
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const order = await lockOrder(tx, id);
     requireState(order, "PENDING_VERIFICATION");
 
@@ -62,15 +67,20 @@ export async function saveCounts(user: AuthUser, id: string, input: SaveCountsIn
     });
     if (Object.keys(fields).length) throw errors.validation(fields);
 
-    for (const row of input.counts) {
-      const expectedQty = expected.get(row.componentId)!;
-      await tx.verificationItem.update({
-        where: { orderId_componentId_attemptNo: { orderId: id, componentId: row.componentId, attemptNo: order.currentAttempt } },
-        data: { actualQty: row.actualQty, status: evaluateCount(expectedQty, row.actualQty) },
-      });
-    }
-    return detailAfterWrite(tx, id);
+    // One statement for every row (not one UPDATE per component). The status is still computed here by
+    // evaluateCount from the stored expected quantity and is never taken from the request; the database
+    // CHECK and trigger validate it again.
+    const componentIds = input.counts.map((row) => row.componentId);
+    const actualQtys = input.counts.map((row) => row.actualQty);
+    const statuses = input.counts.map((row) => evaluateCount(expected.get(row.componentId)!, row.actualQty));
+    const changed = await tx.$executeRaw`
+      UPDATE verification_items AS item
+      SET actual_qty = v.actual_qty, status = v.status::"ItemStatus"
+      FROM unnest(${componentIds}::text[], ${actualQtys}::int[], ${statuses}::text[]) AS v(component_id, actual_qty, status)
+      WHERE item.order_id = ${id} AND item.attempt_no = ${order.currentAttempt} AND item.component_id = v.component_id`;
+    if (changed !== input.counts.length) throw errors.internal();
   });
+  return detailAfterCommit(id);
 }
 
 export type ApprovalBlockReason = "MISSING" | "UNCOUNTED" | "SHORTAGE";
@@ -85,12 +95,13 @@ export type ApprovalBlockingItem = {
 export async function approveOrder(user: AuthUser, id: string): Promise<OrderDetailDto> {
   assertVerifier(user);
   assertOrderId(id);
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const locked = await lockOrder(tx, id);
     requireState(locked, "PENDING_VERIFICATION");
 
     const order = await tx.cuttingOrder.findUniqueOrThrow({
       where: { id },
+      relationLoadStrategy: "join",
       select: {
         targetQty: true,
         actualFabricYds: true,
@@ -164,14 +175,14 @@ export async function approveOrder(user: AuthUser, id: string): Promise<OrderDet
       },
     });
     await tx.cuttingOrder.update({ where: { id }, data: { status: "VERIFIED" } });
-    return detailAfterWrite(tx, id);
   });
+  return detailAfterCommit(id);
 }
 
 export async function rejectOrder(user: AuthUser, id: string, input: RejectOrderInput): Promise<OrderDetailDto> {
   assertVerifier(user);
   assertOrderId(id);
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const order = await lockOrder(tx, id);
     requireState(order, "PENDING_VERIFICATION");
     await tx.verificationLog.create({
@@ -184,18 +195,19 @@ export async function rejectOrder(user: AuthUser, id: string, input: RejectOrder
       },
     });
     await tx.cuttingOrder.update({ where: { id }, data: { status: "REJECTED" } });
-    return detailAfterWrite(tx, id);
   });
+  return detailAfterCommit(id);
 }
 
 export async function resubmitOrder(user: AuthUser, id: string): Promise<OrderDetailDto> {
   assertSupervisor(user);
   assertOrderId(id);
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const order = await lockOrder(tx, id);
     requireState(order, "REJECTED");
     const source = await tx.cuttingOrder.findUniqueOrThrow({
       where: { id },
+      relationLoadStrategy: "join",
       select: {
         targetQty: true,
         recipe: { select: { components: { select: { id: true, componentName: true, piecesPerGarment: true } } } },
@@ -212,6 +224,6 @@ export async function resubmitOrder(user: AuthUser, id: string): Promise<OrderDe
       targetQty: source.targetQty,
       components: source.recipe.components,
     });
-    return detailAfterWrite(tx, id);
   });
+  return detailAfterCommit(id);
 }

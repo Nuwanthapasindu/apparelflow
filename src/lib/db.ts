@@ -26,7 +26,12 @@ if (process.env.NODE_ENV === "production") {
 // Cached on globalThis so `next dev` hot reloads do not open a new connection pool each time.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+// Prisma cancels an interactive transaction after 5 seconds by default (P2028). Over a long network
+// hop that is tight, so allow 6 seconds, and wait at most 2 for a connection: the worst case (8
+// seconds) stays inside a 10-second function limit, so Prisma reports a clean error instead of the
+// platform killing the function with the row lock still held.
+export const prisma =
+  globalForPrisma.prisma ?? new PrismaClient({ transactionOptions: { maxWait: 2_000, timeout: 6_000 } });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

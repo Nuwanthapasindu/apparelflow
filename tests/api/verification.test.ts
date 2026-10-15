@@ -91,6 +91,36 @@ describe("PUT counts", () => {
     }
   });
 
+  it("V7b: a list that mixes a valid row with a foreign component writes nothing", async () => {
+    const order = await createPending(ctx);
+    const other = await createPending(ctx, { recipeId: ctx.recipes.crop.id });
+    const response = await saveCountsRequest(order.id, ctx.users.verifier.id, {
+      counts: [
+        { componentId: order.items[0].componentId, actualQty: 5 },
+        { componentId: other.items[0].componentId, actualQty: 5 },
+      ],
+    });
+    expect(response.status).toBe(400);
+    const counted = await prisma.verificationItem.count({ where: { orderId: order.id, actualQty: { not: null } } });
+    expect(counted).toBe(0);
+  });
+
+  it("V7c: one save computes GREEN, YELLOW and RED (and zero is RED) on the server", async () => {
+    const order = await createPending(ctx);
+    const [a, b, c, d] = order.items;
+    const response = await saveCountsRequest(order.id, ctx.users.verifier.id, {
+      counts: [
+        { componentId: a.componentId, actualQty: a.expectedQty },
+        { componentId: b.componentId, actualQty: b.expectedQty + 1 },
+        { componentId: c.componentId, actualQty: c.expectedQty - 1 },
+        { componentId: d.componentId, actualQty: 0 },
+      ],
+    });
+    expect(response.status).toBe(200);
+    const status = new Map((await responseOrder(response)).items.map((item) => [item.componentId, item.status]));
+    expect([a, b, c, d].map((item) => status.get(item.componentId))).toEqual(["GREEN", "YELLOW", "RED", "RED"]);
+  });
+
   it("V8: a valid unknown order id is 404", async () => {
     expect((await saveCountsRequest(randomUUID(), ctx.users.verifier.id, { counts: [{ componentId: randomUUID(), actualQty: 1 }] })).status).toBe(404);
   });

@@ -12,6 +12,7 @@ import {
   type RecipeDto,
   toOrderListItem,
 } from "./order-dto";
+import { readAfterCommit } from "./after-commit";
 import { getOrderDetailById } from "./order-detail";
 
 // Services take the authenticated user and are the single code path for route handlers and server
@@ -65,9 +66,10 @@ export async function listRecipes(user: AuthUser): Promise<RecipeDto[]> {
 export async function createOrder(user: AuthUser, input: CreateOrderInput): Promise<OrderDetailDto> {
   assertSupervisor(user);
 
-  return prisma.$transaction(async (tx) => {
+  const createdId = await prisma.$transaction(async (tx) => {
     const recipe = await tx.recipe.findUnique({
       where: { id: input.recipeId },
+      relationLoadStrategy: "join",
       select: { id: true, components: { select: { id: true, componentName: true, piecesPerGarment: true } } },
     });
     if (!recipe) throw errors.validation({ recipeId: MESSAGES.recipeUnknown });
@@ -96,11 +98,13 @@ export async function createOrder(user: AuthUser, input: CreateOrderInput): Prom
       targetQty: input.targetQty,
       components: recipe.components,
     });
-
-    const detail = await getOrderDetailById(tx, created.id);
-    if (!detail) throw errors.internal();
-    return detail;
+    return created.id;
   });
+
+  // Read after the commit, so the transaction stays short.
+  const detail = await readAfterCommit(() => getOrderDetailById(prisma, createdId));
+  if (!detail) throw errors.internal();
+  return detail;
 }
 
 export async function listOrders(
