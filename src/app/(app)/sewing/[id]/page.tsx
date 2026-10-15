@@ -61,7 +61,7 @@ async function SewingOrder({ id }: { id: string }) {
 
   return (
     <div className="space-y-5">
-      <Link href="/sewing" className="inline-flex min-h-11 items-center font-semibold">
+      <Link href="/sewing" className="-mx-2 inline-flex min-h-12 items-center px-2 font-semibold">
         &larr; Back to the sewing queue
       </Link>
 
@@ -69,7 +69,7 @@ async function SewingOrder({ id }: { id: string }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">Sewing batch</p>
-            <h1 id="sewing-heading" tabIndex={-1} className="mt-1 font-mono text-3xl font-black outline-none">{order.orderNo}</h1>
+            <h1 id="sewing-heading" tabIndex={-1} className="mt-1 font-mono text-3xl font-black outline-none focus:outline-2 focus:outline-offset-4 focus:outline-white">{order.orderNo}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {order.attemptNo > 1 && <RecutBadge attemptNo={order.attemptNo} />}
@@ -109,7 +109,7 @@ async function SewingOrder({ id }: { id: string }) {
 
       <section aria-labelledby="counts-title" className="space-y-3">
         <h2 id="counts-title" className="text-xl font-black text-slate-950">Verified component counts</h2>
-        <div className="overflow-x-auto rounded-xl border border-slate-500 bg-white">
+        <div role="region" aria-labelledby="counts-title" tabIndex={0} className="overflow-x-auto rounded-xl border border-slate-500 bg-white">
           <table className="w-full text-left">
             <caption className="sr-only">Component counts recorded by the verifier</caption>
             <thead>

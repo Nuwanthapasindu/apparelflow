@@ -23,6 +23,7 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
   const [refreshedAt, setRefreshedAt] = useState(initialNow);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ queue: null, active: null });
 
   async function refresh() {
@@ -36,6 +37,7 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
       ]);
       setLists({ queue: queue.orders, active: active.orders });
       setRefreshedAt(new Date().toISOString());
+      setAnnouncement(`Lists updated: ${queue.orders.length} ready for sewing, ${active.orders.length} in sewing.`);
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : "The lists could not be refreshed");
     } finally {
@@ -44,9 +46,10 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
   }
 
   function onTabKey(event: React.KeyboardEvent, index: number) {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const next = TABS[(index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length].key;
+    const target = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1 : (index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
+    const next = TABS[target].key;
     setTab(next);
     tabRefs.current[next]?.focus();
   }
@@ -74,6 +77,8 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
         </p>
       )}
 
+      <p role="status" className="sr-only">{announcement}</p>
+
       <div role="tablist" aria-label="Sewing lists" className="flex flex-wrap gap-2">
         {TABS.map(({ key, label }, index) => {
           const selected = tab === key;
@@ -94,7 +99,7 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
               }`}
             >
               {label}
-              <span className={`rounded-full px-2 py-0.5 text-sm ${selected ? "bg-white text-blue-950" : "bg-slate-200 text-slate-950"}`}>{lists[key].length}</span>
+              <span className={`rounded-full px-2 py-0.5 text-sm ${selected ? "bg-white text-blue-950" : "bg-slate-200 text-slate-950"}`}>{lists[key].length}<span className="sr-only"> batches</span></span>
             </button>
           );
         })}
@@ -112,7 +117,10 @@ export function SewingBoard({ initial, initialNow }: { initial: Lists; initialNo
           </div>
         ) : (
           <>
-            <p className="text-sm text-slate-700">Last refreshed {formatDateTime(refreshedAt)}</p>
+            <p className="text-sm text-slate-700">
+              Last refreshed {formatDateTime(refreshedAt)}
+              {orders.length >= 100 && ". Showing the first 100 batches."}
+            </p>
             <ol className="grid gap-4 md:grid-cols-2" aria-label={tab === "queue" ? "Batches ready for sewing" : "Batches in sewing"}>
               {orders.map((order) => (
                 <li key={order.id}>
