@@ -6,6 +6,10 @@ export const REJECTION_NOTE_MAX = 1_000;
 
 const componentId = z.string().uuid("Choose a valid component");
 
+export const orderActionParamsSchema = z.strictObject({
+  id: z.string().uuid("Enter a valid order id"),
+});
+
 const countRowSchema = z.strictObject({
   componentId,
   actualQty: z
