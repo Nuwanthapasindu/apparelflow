@@ -3,7 +3,8 @@ import type { AuthUser } from "@/lib/auth/user";
 import { prisma } from "@/lib/db";
 import { MAX_LIMIT } from "@/lib/validation/order-query";
 import type { SewingListQuery } from "@/lib/validation/sewing";
-import { SEWING_ORDER_SELECT, type SewingCardDto, toSewingCard } from "./sewing-dto";
+import { isOrderId } from "@/lib/validation/order";
+import { SEWING_ORDER_SELECT, type SewingCardDto, type SewingDetailDto, toSewingCard, toSewingDetail } from "./sewing-dto";
 import { listSewingQueue } from "./sewing-queue";
 
 // Services take the authenticated user and re-assert the role, so a caller that forgets
@@ -50,4 +51,29 @@ export async function listSewingActive({ limit }: { limit: number }): Promise<Se
 export async function getSewingActive(user: AuthUser, query: SewingListQuery): Promise<SewingCardDto[]> {
   assertSewing(user);
   return listSewingActive(query);
+}
+
+/**
+ * One order for the sewing role. Scope is part of the query: only VERIFIED or IN_SEWING orders are
+ * found, so a pending, rejected or unknown id is simply null and the caller answers 404, never
+ * revealing that the order exists. Only the approved attempt's data is loaded.
+ */
+export async function getSewingOrder(user: AuthUser, id: string): Promise<SewingDetailDto | null> {
+  assertSewing(user);
+  if (!isOrderId(id)) return null; // ids are UUIDs: anything else cannot exist (and a NUL byte would break Postgres)
+
+  const row = await prisma.cuttingOrder.findFirst({
+    where: { id, status: { in: ["VERIFIED", "IN_SEWING"] } },
+    select: SEWING_ORDER_SELECT,
+  });
+  if (!row) return null;
+  const approved = row.logs.find((log) => log.attemptNo === row.currentAttempt);
+  if (!approved) return null;
+
+  const items = await prisma.verificationItem.findMany({
+    where: { orderId: id, attemptNo: approved.attemptNo },
+    orderBy: { componentName: "asc" },
+    select: { componentName: true, expectedQty: true, actualQty: true, status: true },
+  });
+  return toSewingDetail(row, items);
 }

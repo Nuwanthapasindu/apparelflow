@@ -123,3 +123,36 @@ export function toSewingCard(row: SewingOrderRow): SewingCardDto | null {
       : {}),
   };
 }
+
+export type SewingItemRow = {
+  componentName: string;
+  expectedQty: number;
+  actualQty: number | null;
+  status: ItemStatus | null;
+};
+
+/**
+ * The detail view: the card plus the approved attempt's counts and the full fabric snapshot. Null
+ * (so the caller answers 404) if any count is missing, which the database already makes impossible.
+ */
+export function toSewingDetail(row: SewingOrderRow, items: SewingItemRow[]): SewingDetailDto | null {
+  const card = toSewingCard(row);
+  const snapshot = approvedSnapshot(row);
+  if (!card || !snapshot || items.length === 0) return null;
+  const counted: SewingDetailDto["items"] = [];
+  for (const item of items) {
+    if (item.actualQty === null || item.status === null) return null;
+    counted.push({
+      componentName: item.componentName,
+      expectedQty: item.expectedQty,
+      actualQty: item.actualQty,
+      status: item.status,
+      variance: item.actualQty - item.expectedQty,
+    });
+  }
+  return {
+    ...card,
+    approval: { ...card.approval, expectedFabricYds: snapshot.expectedFabricYds, actualFabricYds: snapshot.actualFabricYds },
+    items: counted,
+  };
+}

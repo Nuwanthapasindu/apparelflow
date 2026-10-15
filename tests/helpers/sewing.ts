@@ -1,4 +1,5 @@
 import * as activeRoute from "@/app/api/sewing/active/route";
+import * as detailRoute from "@/app/api/sewing/[id]/route";
 import * as queueRoute from "@/app/api/sewing/queue/route";
 import { prisma } from "./db";
 import { as } from "./orders";
@@ -20,6 +21,9 @@ export const sewingQueueRequest = async (userId: string | null, query = "") =>
 
 export const sewingActiveRequest = async (userId: string | null, query = "") =>
   activeRoute.GET(await as(userId, "GET", `/api/sewing/active${query}`), undefined);
+
+export const sewingDetailRequest = async (id: string, userId: string | null) =>
+  detailRoute.GET(await as(userId, "GET", `/api/sewing/${encodeURIComponent(id)}`), { params: Promise.resolve({ id }) });
 
 /** An order that went through the real legal path: created, fully counted, approved. */
 export async function createVerified(ctx: VerificationContext, overrides: Overrides = {}): Promise<Pending> {
