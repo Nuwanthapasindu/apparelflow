@@ -151,8 +151,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 
 ## Deployment and migrations
 
-- Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` in Vercel. Choose the Vercel region closest to the Supabase region.
-- Migrations are **not** run by the Vercel build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`). `postinstall` runs `prisma generate` so the git-ignored client exists on Vercel.
+- The live site runs on Netlify. Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` as site environment variables. **`NEXT_PUBLIC_DEMO_MODE` is read at build time**: after adding or changing it, redeploy with the build cache cleared, or the demo credentials and Role Switcher stay hidden. Choose the region closest to the Supabase region.
+- Migrations are **not** run by the host build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`), then `yarn prisma migrate status` should report the database is up to date. `postinstall` runs `prisma generate` so the git-ignored client exists on the host.
 - Next's file tracing includes the Linux Prisma engine in every server route (`outputFileTracingIncludes`), and `src/lib/db.ts` copies it to `/tmp/prisma-engines` on a cold start, because the bundler rewrites the generated client's directory to a path that does not exist in a serverless function. The generator lists `rhel-openssl-3.0.x` in `binaryTargets`.
 - A free-tier Supabase project can pause when inactive: open its dashboard before using the live demo.
 - Orders created while testing stay in the database; remove them in the Supabase SQL editor if you want a clean board.
