@@ -82,5 +82,8 @@ export async function snapshotState() {
   const itemFingerprint = await prisma.$queryRaw<{ f: string }[]>`
     SELECT coalesce(string_agg(id || ':' || coalesce(actual_qty::text, '-') || ':' || coalesce(status::text, '-'), '|' ORDER BY id), '') AS f
     FROM verification_items`;
-  return { orders, items, logs, orderFingerprint: fingerprint[0].f, itemFingerprint: itemFingerprint[0].f };
+  const logFingerprint = await prisma.$queryRaw<{ f: string }[]>`
+    SELECT coalesce(string_agg(id || ':' || order_id || ':' || attempt_no::text || ':' || decision::text || ':' || coalesce(rejection_note, '-') || ':' || verifier_id, '|' ORDER BY id), '') AS f
+    FROM verification_logs`;
+  return { orders, items, logs, orderFingerprint: fingerprint[0].f, itemFingerprint: itemFingerprint[0].f, logFingerprint: logFingerprint[0].f };
 }

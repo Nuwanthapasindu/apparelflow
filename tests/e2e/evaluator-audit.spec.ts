@@ -84,4 +84,8 @@ test("evaluator path: create, shortage blocks approval, approve, sewing queue, s
   expect((await sewing.post(`/api/sewing/${pending.id}/start`, { data: {} })).status()).toBe(404);
   const queue = await (await sewing.get("/api/sewing/queue?status=PENDING_VERIFICATION")).json();
   expect(JSON.stringify(queue)).not.toContain(pending.id);
+  // Over real HTTP: the static segments are served by their own routes, and there is no way to edit the queue.
+  expect((await sewing.get("/api/sewing/active")).status()).toBe(200);
+  expect((await sewing.put("/api/sewing/queue", { data: {} })).status()).toBe(405);
+  expect((await sewing.delete(`/api/sewing/${pending.id}`)).status()).toBe(405);
 });

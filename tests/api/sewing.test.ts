@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -108,7 +108,7 @@ describe("sewing queue endpoint", () => {
     // Created as 0, 1, 2 but approved as 1, 2, 0.
     for (const index of [1, 2, 0]) {
       expect((await approveRequest(orders[index].id, ctx.users.verifier.id)).status).toBe(200);
-      await wait(15);
+      await wait(60);
     }
     const { orders: queue } = await queueOf(ctx.users.sewing.id);
     expect(queue.map((o) => o.id)).toEqual([orders[1].id, orders[2].id, orders[0].id]);
@@ -461,5 +461,24 @@ describe("start sewing endpoint", () => {
     const text = await res.text();
     expect(JSON.parse(text).data.order.attemptNo).toBe(2);
     expect(text.toLowerCase()).not.toContain("reject");
+  });
+});
+
+describe("the constants the sewing safety rests on", () => {
+  const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+
+  it("the queue's status filter is the literal VERIFIED constant, in one function, with no parameter", () => {
+    const queue = source("src/lib/services/sewing-queue.ts");
+    expect(queue).toContain("WHERE o.status = 'VERIFIED'");
+    expect(queue).toContain('status: "VERIFIED"'); // applied again when the rows are loaded
+    expect(queue.match(/o\.status/g)).toHaveLength(1); // no second, parameterised status filter
+    expect(queue).not.toMatch(/status\s*[:=]\s*(query|params|input|request)/i);
+    expect(source("src/lib/services/sewing.ts")).toContain("WHERE o.status = 'IN_SEWING'");
+  });
+
+  it("the start time comes from the database clock, not the application's", () => {
+    const service = source("src/lib/services/sewing.ts");
+    expect(service).toContain("sewing_started_at = now()");
+    expect(service).not.toMatch(/sewingStartedAt\s*:\s*new Date/);
   });
 });
