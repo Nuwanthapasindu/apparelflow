@@ -17,13 +17,13 @@ If `.env.test` is missing or the database is not running, `yarn test` stops at o
 
 ## Evaluator quick path
 
-Demo mode shows a **Role Switcher** (a dropdown in the header). It signs out and signs in again through the real login endpoint, so the server-side session genuinely changes; it never flips client state.
+There is no account switcher: to change role, click **Sign out** in the header and sign in again with another account from the **Demo credentials** table below. Each sign-in goes through the real login endpoint, so the server-side session genuinely changes.
 
 1. **Create an order.** Sign in as the Cutting Supervisor (credentials below). Click **New Cutting Order**, pick a recipe, enter a target quantity (for example `50`), a roll id and the fabric used (for example `91.00`), and click **Submit for verification**.
-2. **The Verifier cannot create orders.** In the header open **Switch role** and choose **Cutting Verifier**. The order-creation button is not in the page at all (not hidden, absent from the DOM).
+2. **The Verifier cannot create orders.** Click **Sign out**, then sign in as the Cutting Verifier. The order-creation button is not in the page at all (not hidden, absent from the DOM).
 3. **A shortage blocks approval.** Open the batch from the queue. Type one fewer than the expected quantity in any row and click **Save counts**: that row turns red with **SHORTAGE** and **Approve Batch** is disabled with the reason beside it. Open the browser dev tools, remove the `disabled` attribute and click it, or send `POST /api/orders/<id>/approve` yourself: the server still answers **422** and names the short component.
 4. **Approve a valid batch.** Correct the count, **Save counts**, click **Approve Batch**, then **Confirm approval**.
-5. **Sewing sees only verified batches.** Choose **Sewing Supervisor** in **Switch role**. The approved batch is in **Ready for sewing**; any pending or rejected batch is absent (try `/api/sewing/queue?status=PENDING_VERIFICATION`: the parameter is ignored). Reload to see it persist, open the batch and click **Start Sewing Assembly** to move it to **In sewing**.
+5. **Sewing sees only verified batches.** Sign out and sign in as the Sewing Supervisor. The approved batch is in **Ready for sewing**; any pending or rejected batch is absent (try `/api/sewing/queue?status=PENDING_VERIFICATION`: the parameter is ignored). Reload to see it persist, open the batch and click **Start Sewing Assembly** to move it to **In sewing**.
 
 ## Demo credentials
 
@@ -35,7 +35,7 @@ Public demo accounts with sample data only. Sign in on `/login`.
 | Cutting Verifier | `cutting.verifier@apparelflow.test` | `Demo-Verifier-1` | Count components, approve, reject with a note | Create orders; see the Sewing Queue |
 | Sewing Supervisor | `sewing.supervisor@apparelflow.test` | `Demo-Sewing-1` | See verified batches, start sewing | See pending, unverified or rejected orders |
 
-The accounts and the two recipes (REC-BL01 Casual Blouse, REC-CT02 Crop Top) are created by `yarn prisma db seed`, which also resets the demo passwords to the values above. The Role Switcher appears only when `NEXT_PUBLIC_DEMO_MODE=true`.
+The accounts and the two recipes (REC-BL01 Casual Blouse, REC-CT02 Crop Top) are created by `yarn prisma db seed`, which also resets the demo passwords to the values above.
 
 ## Architecture
 
@@ -131,7 +131,7 @@ Status codes: 400 malformed or invalid input (including a blank rejection note a
 
 ```bash
 yarn install                        # also runs prisma generate
-# create .env with DATABASE_URL, DIRECT_URL, JWT_SECRET (32+ chars), NEXT_PUBLIC_DEMO_MODE=true (names in .env.example)
+# create .env with DATABASE_URL, DIRECT_URL, JWT_SECRET (32+ chars) (names in .env.example)
 yarn prisma migrate deploy && yarn prisma db seed
 yarn dev                            # http://localhost:3000
 ```
@@ -151,7 +151,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 
 ## Deployment and migrations
 
-- The live site runs on Netlify. Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` as site environment variables. **`NEXT_PUBLIC_DEMO_MODE` is read at build time**: after adding or changing it, redeploy with the build cache cleared, or the demo credentials and Role Switcher stay hidden. Choose the region closest to the Supabase region.
+- The live site runs on Netlify. Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432) and `JWT_SECRET` (32 or more random characters) as site environment variables. Choose the region closest to the Supabase region.
 - Migrations are **not** run by the host build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`), then `yarn prisma migrate status` should report the database is up to date. `postinstall` runs `prisma generate` so the git-ignored client exists on the host.
 - Next's file tracing includes the Linux Prisma engine in every server route (`outputFileTracingIncludes`), and `src/lib/db.ts` copies it to `/tmp/prisma-engines` on a cold start, because the bundler rewrites the generated client's directory to a path that does not exist in a serverless function. The generator lists `rhel-openssl-3.0.x` in `binaryTargets`.
 - A free-tier Supabase project can pause when inactive: open its dashboard before using the live demo.

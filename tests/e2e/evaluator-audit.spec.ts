@@ -20,7 +20,7 @@ test("evaluator path: create, shortage blocks approval, approve, sewing queue, s
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("link", { name: orderNo })).toBeVisible();
 
-  // 2. Switch to Verifier: the order-creation control is not in the DOM at all.
+  // 2. Sign in as the Verifier: the order-creation control is not in the DOM at all.
   await switchRole(page, "verifier");
   await expect(page.getByRole("heading", { name: "Verifier Terminal" })).toBeVisible();
   expect(await page.getByRole("button", { name: /New Cutting Order/ }).count()).toBe(0);
@@ -59,7 +59,7 @@ test("evaluator path: create, shortage blocks approval, approve, sewing queue, s
   await page.waitForURL(/result=verified/);
   await expect(page.getByText(`${orderNo} verified`)).toBeVisible();
 
-  // 5. Switch to Sewing: unverified batches are invisible, the approved one is in the queue, and it persists.
+  // 5. Sign in as Sewing: unverified batches are invisible, the approved one is in the queue, and it persists.
   await switchRole(page, "sewing");
   await expect(page.getByRole("heading", { name: "Sewing Queue" })).toBeVisible();
   await expect(page.getByRole("link", { name: new RegExp(orderNo) })).toBeVisible();
