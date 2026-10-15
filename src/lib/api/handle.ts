@@ -22,7 +22,13 @@ export function handle<C = unknown>(handler: Handler<C>, options: { mutating?: b
       if (isNextSignal(error)) throw error;
       if (error instanceof ApiError) return errorResponse(error);
       const mapped = mapDbError(error);
-      if (mapped) return errorResponse(mapped);
+      if (mapped) {
+        if (mapped.status >= 500) {
+          const e = error as { name?: string; code?: string } | null;
+          console.error("[api] mapped internal database error", { name: e?.name, code: e?.code });
+        }
+        return errorResponse(mapped);
+      }
 
       // Log the type only: error messages can carry SQL text or user input.
       const e = error as { name?: string; code?: string } | null;

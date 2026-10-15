@@ -16,10 +16,17 @@ export function ok<T>(data: T, options: Options = {}): Response {
   return build({ data }, options);
 }
 
-/** Error envelope: `{ "error": { "code", "message", "fields"? } }`. */
+/** Error envelope: `{ "error": { "code", "message", "fields"?, "details"? } }`. */
 export function errorResponse(error: ApiError): Response {
   return build(
-    { error: { code: error.code, message: error.message, ...(error.fields ? { fields: error.fields } : {}) } },
+    {
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.fields ? { fields: error.fields } : {}),
+        ...(error.details ? { details: error.details } : {}),
+      },
+    },
     { status: error.status, cookies: error.cookies },
   );
 }

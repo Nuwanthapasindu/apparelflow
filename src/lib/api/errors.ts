@@ -9,6 +9,7 @@ export type ErrorCode =
   | "INTERNAL";
 
 export type FieldErrors = Record<string, string>;
+export type ErrorDetails = Record<string, unknown>;
 
 /** An error that maps to a specific HTTP status and the standard error envelope. */
 export class ApiError extends Error {
@@ -20,6 +21,7 @@ export class ApiError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly fields?: FieldErrors,
+    readonly details?: ErrorDetails,
   ) {
     super(message);
     this.name = "ApiError";
@@ -39,6 +41,7 @@ export const errors = {
     new ApiError(400, "VALIDATION_ERROR", message, Object.keys(fields).length ? fields : undefined),
   notFound: (message = "Not found") => new ApiError(404, "NOT_FOUND", message),
   conflict: (message = "The request conflicts with the current state") => new ApiError(409, "CONFLICT", message),
-  unprocessable: (message = "The request violates a business rule") => new ApiError(422, "UNPROCESSABLE", message),
+  unprocessable: (message = "The request violates a business rule", details?: ErrorDetails) =>
+    new ApiError(422, "UNPROCESSABLE", message, undefined, details),
   internal: () => new ApiError(500, "INTERNAL", "Something went wrong"),
 };

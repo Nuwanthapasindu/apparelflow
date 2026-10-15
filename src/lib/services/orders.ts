@@ -10,15 +10,18 @@ import {
   type OrderDetailDto,
   type OrderListItemDto,
   type RecipeDto,
-  toOrderDetail,
   toOrderListItem,
 } from "./order-dto";
+import { getOrderDetailById } from "./order-detail";
 
 // Services take the authenticated user and are the single code path for route handlers and server
 // components. They re-assert the role themselves, so a caller that forgets requireRole still fails.
 const SUPERVISOR: Role = "cutting_supervisor";
 const assertSupervisor = (user: AuthUser) => {
   if (user.role !== SUPERVISOR) throw errors.forbidden();
+};
+const assertOrderReader = (user: AuthUser) => {
+  if (user.role !== "cutting_supervisor" && user.role !== "cutting_verifier") throw errors.forbidden();
 };
 
 const ORDER_SELECT = {
@@ -33,12 +36,6 @@ const ORDER_SELECT = {
   recipe: { select: { id: true, recipeCode: true, name: true } },
   createdBy: { select: { id: true, fullName: true } },
 } as const;
-
-const itemsOf = (orderId: string, attemptNo: number) => ({
-  where: { orderId, attemptNo },
-  orderBy: { componentName: "asc" as const },
-  select: { componentId: true, componentName: true, expectedQty: true, actualQty: true, status: true },
-});
 
 export async function listRecipes(user: AuthUser): Promise<RecipeDto[]> {
   assertSupervisor(user);
@@ -100,8 +97,9 @@ export async function createOrder(user: AuthUser, input: CreateOrderInput): Prom
       components: recipe.components,
     });
 
-    const row = await tx.cuttingOrder.findUniqueOrThrow({ where: { id: created.id }, select: ORDER_SELECT });
-    return toOrderDetail(row, await tx.verificationItem.findMany(itemsOf(created.id, 1)));
+    const detail = await getOrderDetailById(tx, created.id);
+    if (!detail) throw errors.internal();
+    return detail;
   });
 }
 
@@ -109,10 +107,14 @@ export async function listOrders(
   user: AuthUser,
   query: ListOrdersQuery,
 ): Promise<{ orders: OrderListItemDto[]; hasMore: boolean }> {
-  assertSupervisor(user);
+  assertOrderReader(user);
+  if (user.role === "cutting_verifier" && query.status && query.status !== "PENDING_VERIFICATION") {
+    throw errors.forbidden("Verifiers may only list orders pending verification");
+  }
+  const verifier = user.role === "cutting_verifier";
   const rows = await prisma.cuttingOrder.findMany({
-    where: query.status ? { status: query.status } : undefined,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    where: verifier ? { status: "PENDING_VERIFICATION" } : query.status ? { status: query.status } : undefined,
+    orderBy: verifier ? [{ createdAt: "asc" }, { id: "asc" }] : [{ createdAt: "desc" }, { id: "desc" }],
     take: query.limit + 1, // one extra row tells us whether there is more
     select: ORDER_SELECT,
   });
@@ -121,10 +123,8 @@ export async function listOrders(
 
 /** Null when the order does not exist; the caller turns that into a 404 (after the role check). */
 export async function getOrder(user: AuthUser, id: string): Promise<OrderDetailDto | null> {
-  assertSupervisor(user);
+  assertOrderReader(user);
   // A malformed id (including a NUL byte, which Postgres refuses in text) cannot exist: not found.
   if (!isOrderId(id)) return null;
-  const row = await prisma.cuttingOrder.findUnique({ where: { id }, select: ORDER_SELECT });
-  if (!row) return null;
-  return toOrderDetail(row, await prisma.verificationItem.findMany(itemsOf(row.id, row.currentAttempt)));
+  return getOrderDetailById(prisma, id, { pendingOnly: user.role === "cutting_verifier" });
 }
