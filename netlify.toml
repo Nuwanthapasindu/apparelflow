@@ -1,0 +1,6 @@
+# Next.js inlines NEXT_PUBLIC_* variables while it builds, so the demo accounts and the Role Switcher
+# are switched on here, in the build environment, rather than only in the Netlify dashboard.
+# These are public demo accounts with sample data (see the README); no secret belongs in this file.
+# DATABASE_URL, DIRECT_URL and JWT_SECRET stay in the Netlify site settings.
+[build.environment]
+  NEXT_PUBLIC_DEMO_MODE = "true"
