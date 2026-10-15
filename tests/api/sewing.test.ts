@@ -12,6 +12,7 @@ import {
   createOneOfEachStatus,
   createRecutAndVerified,
   createVerified,
+  sewingActiveRequest,
   sewingQueueRequest,
   snapshotState,
 } from "../helpers/sewing";
@@ -138,6 +139,82 @@ describe("sewing queue endpoint", () => {
 
   it("S12a: the static segment is served by the queue handler, not captured by [id]", async () => {
     const res = await sewingQueueRequest(ctx.users.sewing.id);
+    expect(res.status).toBe(200);
+    expect(Array.isArray((await res.json()).data.orders)).toBe(true);
+  });
+});
+
+const activeOf = async (userId: string | null, query = "") => {
+  const res = await sewingActiveRequest(userId, query);
+  return { res, orders: ((await res.clone().json()).data?.orders ?? []) as { id: string; sewingStartedBy?: { fullName: string }; sewingStartedAt?: string }[] };
+};
+
+describe("sewing active endpoint", () => {
+  it("S1: no session is 401, supervisor and verifier are 403, and nothing changes", async () => {
+    await createOneOfEachStatus(ctx);
+    const before = await snapshotState();
+    expect((await sewingActiveRequest(null)).status).toBe(401);
+    expect((await sewingActiveRequest(ctx.users.supervisor.id)).status).toBe(403);
+    expect((await sewingActiveRequest(ctx.users.verifier.id)).status).toBe(403);
+    expect(await snapshotState()).toEqual(before);
+  });
+
+  it("returns exactly the IN_SEWING order, with who started it and when, and never a user id", async () => {
+    const { inSewing } = await createOneOfEachStatus(ctx);
+    const res = await sewingActiveRequest(ctx.users.sewing.id);
+    const text = await res.clone().text();
+    expect(res.status).toBe(200);
+    const orders = (await res.json()).data.orders;
+    expect(orders.map((o: { id: string }) => o.id)).toEqual([inSewing.id]);
+    expect(orders[0]).toMatchObject({ status: "IN_SEWING", sewingStartedBy: { fullName: "Sewing Supervisor" }, attemptNo: 1 });
+    expect(new Date(orders[0].sewingStartedAt).getTime()).not.toBeNaN();
+    for (const forbidden of [ctx.users.sewing.id, ctx.users.verifier.id, ctx.users.sewing.email, "@", "rejection"]) {
+      expect(text).not.toContain(forbidden);
+    }
+  });
+
+  it("an order is in exactly one of the two lists", async () => {
+    const { verified, inSewing } = await createOneOfEachStatus(ctx);
+    const queue = (await queueOf(ctx.users.sewing.id)).orders.map((o) => o.id);
+    const active = (await activeOf(ctx.users.sewing.id)).orders.map((o) => o.id);
+    expect(queue).toEqual([verified.id]);
+    expect(active).toEqual([inSewing.id]);
+  });
+
+  it("S5: tampering with query parameters never changes the active list", async () => {
+    await createOneOfEachStatus(ctx);
+    const baseline = (await activeOf(ctx.users.sewing.id)).orders.map((o) => o.id);
+    expect(baseline).toHaveLength(1);
+    for (const query of ["?status=VERIFIED", "?status=PENDING_VERIFICATION", "?all=true", "?includeRejected=1", "?where=1%3D1"]) {
+      const { res, orders } = await activeOf(ctx.users.sewing.id, query);
+      expect(res.status, query).toBe(200);
+      expect(orders.map((o) => o.id), query).toEqual(baseline);
+    }
+  });
+
+  it("S6: an invalid limit is a 400 with a field error", async () => {
+    for (const query of ["?limit=0", "?limit=101", "?limit=abc", "?limit=5.5", "?limit="]) {
+      const res = await sewingActiveRequest(ctx.users.sewing.id, query);
+      expect(res.status, query).toBe(400);
+      expect((await res.json()).error.fields.limit).toEqual(expect.any(String));
+    }
+  });
+
+  it("lists the most recently started order first", async () => {
+    const first = await createVerified(ctx);
+    const second = await createVerified(ctx);
+    const startedAt = [new Date("2026-01-01T08:00:00Z"), new Date("2026-01-01T09:00:00Z")];
+    for (const [index, order] of [first, second].entries()) {
+      await prisma.cuttingOrder.update({
+        where: { id: order.id },
+        data: { status: "IN_SEWING", sewingStartedById: ctx.users.sewing.id, sewingStartedAt: startedAt[index] },
+      });
+    }
+    expect((await activeOf(ctx.users.sewing.id)).orders.map((o) => o.id)).toEqual([second.id, first.id]);
+  });
+
+  it("S12b: the static segment is served by the active handler, not captured by [id]", async () => {
+    const res = await sewingActiveRequest(ctx.users.sewing.id);
     expect(res.status).toBe(200);
     expect(Array.isArray((await res.json()).data.orders)).toBe(true);
   });

@@ -1,3 +1,4 @@
+import * as activeRoute from "@/app/api/sewing/active/route";
 import * as queueRoute from "@/app/api/sewing/queue/route";
 import { prisma } from "./db";
 import { as } from "./orders";
@@ -16,6 +17,9 @@ type Overrides = Parameters<typeof createPending>[1];
 
 export const sewingQueueRequest = async (userId: string | null, query = "") =>
   queueRoute.GET(await as(userId, "GET", `/api/sewing/queue${query}`), undefined);
+
+export const sewingActiveRequest = async (userId: string | null, query = "") =>
+  activeRoute.GET(await as(userId, "GET", `/api/sewing/active${query}`), undefined);
 
 /** An order that went through the real legal path: created, fully counted, approved. */
 export async function createVerified(ctx: VerificationContext, overrides: Overrides = {}): Promise<Pending> {
