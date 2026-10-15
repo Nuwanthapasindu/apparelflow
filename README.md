@@ -71,7 +71,7 @@ erDiagram
 |---|---|
 | `users` | Three roles (`cutting_supervisor`, `cutting_verifier`, `sewing_supervisor`), Argon2id hash, `is_active`. |
 | `refresh_tokens` | Hashed rotating refresh tokens grouped by `family_id`, with `used_at` and `revoked_at` for reuse detection. |
-| `recipes`, `recipe_components` | Seeded and read-only (no endpoint or screen edits them). Standard fabric yards, wastage cap, pieces per garment. |
+| `recipes`, `recipe_components` | Seeded and read-only (no endpoint or screen edits them). Standard fabric yards, wastage cap, pieces per garment. `recipe_components.image_url` is in the brief's schema and kept as a nullable column, but it is intentionally unused: no images are seeded and no screen shows one. |
 | `cutting_orders` | One row per batch: recipe, target quantity, fabric roll, fabric used, `status`, `current_attempt`, who started sewing and when. |
 | `verification_items` | One row per component and attempt. `component_name` and `expected_qty` are **snapshots** taken when the attempt starts; `actual_qty` and `status` stay `NULL` until counted. |
 | `verification_logs` | The decision per attempt (`APPROVED` or `REJECTED`, unique per order and attempt), the verifier, the server timestamp, the rejection note, and on approval the fabric snapshot (expected and actual yards, wastage %, cap, `over_cap`). **Append-only.** |
