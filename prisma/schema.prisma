@@ -175,7 +175,7 @@ model VerificationLog {
   // Fabric snapshot, frozen at APPROVAL (NULL on rejection)
   expectedFabricYds Decimal? @map("expected_fabric_yds") @db.Decimal(10, 2)
   actualFabricYds   Decimal? @map("actual_fabric_yds") @db.Decimal(8, 2)
-  wastagePct        Decimal? @map("wastage_pct") @db.Decimal(6, 2)
+  wastagePct        Decimal? @map("wastage_pct") @db.Decimal(14, 2)
   wastageCapPct     Decimal? @map("wastage_cap_pct") @db.Decimal(5, 2)
   overCap           Boolean? @map("over_cap")
 
