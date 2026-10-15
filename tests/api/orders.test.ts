@@ -374,8 +374,8 @@ describe("GET /api/orders", () => {
     expect((await (await list()).json()).data).toEqual({ orders: [], hasMore: false });
   });
 
-  it("O19: verifier and sewing get 403, no session gets 401", async () => {
-    expect((await list("", ctx.ver)).status).toBe(403);
+  it("O19 / V60: verifier gets the pending queue, sewing gets 403, no session gets 401", async () => {
+    expect((await list("", ctx.ver)).status).toBe(200);
     expect((await list("", ctx.sew)).status).toBe(403);
     expect((await list("", null)).status).toBe(401);
   });
@@ -437,13 +437,12 @@ describe("GET /api/orders/:id", () => {
     expect((await getById(id)).status).toBe(404);
   });
 
-  it("O23: verifier, sewing and no session get 403 / 403 / 401, even for an id that does not exist", async () => {
+  it("O23 / V61: verifier sees pending detail; sewing and no session remain 403 / 401", async () => {
     const { order } = (await (await create(valid())).json()).data;
-    for (const id of [order.id, "does-not-exist"]) {
-      expect((await getById(id, ctx.ver)).status).toBe(403);
-      expect((await getById(id, ctx.sew)).status).toBe(403);
-      expect((await getById(id, null)).status).toBe(401);
-    }
+    expect((await getById(order.id, ctx.ver)).status).toBe(200);
+    expect((await getById("does-not-exist", ctx.ver)).status).toBe(404);
+    expect((await getById(order.id, ctx.sew)).status).toBe(403);
+    expect((await getById(order.id, null)).status).toBe(401);
   });
 
   it("O25: decimals are strings with two places", async () => {
@@ -491,15 +490,18 @@ describe("GET /api/recipes", () => {
 });
 
 describe("sewing supervisor reaches no order data", () => {
-  it("O28: every Day 2 order endpoint is closed to the sewing role (and to the verifier)", async () => {
+  it("O28 / V64: sewing reaches no order data; verifier gets only pending reads", async () => {
     const { order } = (await (await create(valid())).json()).data;
-    for (const id of [ctx.sew, ctx.ver]) {
-      expect((await create(valid(), id)).status).toBe(403);
-      expect((await list("", id)).status).toBe(403);
-      expect((await list("?status=VERIFIED", id)).status).toBe(403);
-      expect((await getById(order.id, id)).status).toBe(403);
-      expect((await recipes(id)).status).toBe(403);
-    }
+    expect((await create(valid(), ctx.sew)).status).toBe(403);
+    expect((await list("", ctx.sew)).status).toBe(403);
+    expect((await getById(order.id, ctx.sew)).status).toBe(403);
+    expect((await recipes(ctx.sew)).status).toBe(403);
+
+    expect((await create(valid(), ctx.ver)).status).toBe(403);
+    expect((await list("", ctx.ver)).status).toBe(200);
+    expect((await list("?status=VERIFIED", ctx.ver)).status).toBe(403);
+    expect((await getById(order.id, ctx.ver)).status).toBe(200);
+    expect((await recipes(ctx.ver)).status).toBe(403);
   });
 
   it("only the agreed methods are exported", () => {

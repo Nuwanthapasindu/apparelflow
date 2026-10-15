@@ -31,5 +31,6 @@ export function mapDbError(error: unknown): ApiError | null {
   if (state === "GK422") return errors.unprocessable("The request violates a business rule");
   if (state === "23505" || prismaCode === "P2002") return errors.conflict("A conflicting record already exists");
   if (state === "23514") return errors.validation({}, "The submitted values are not valid");
+  if (state === "22003") return errors.internal();
   return null;
 }

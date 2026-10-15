@@ -7,6 +7,7 @@ export class ApiClientError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: Record<string, string>,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -20,7 +21,10 @@ export class ApiClientError extends Error {
  */
 export const apiClient = axios.create({ timeout: 30_000, validateStatus: () => true });
 
-type Envelope<T> = { data?: T; error?: { code?: string; message?: string; fields?: Record<string, string> } };
+type Envelope<T> = {
+  data?: T;
+  error?: { code?: string; message?: string; fields?: Record<string, string>; details?: Record<string, unknown> };
+};
 type Init = { method?: string; body?: unknown };
 
 function send<T>(path: string, init: Init) {
@@ -64,7 +68,13 @@ export async function apiFetch<T>(path: string, init: Init = {}): Promise<T> {
   const payload: Envelope<T> | null = typeof res.data === "object" && res.data !== null ? res.data : null;
   if (!succeeded(res.status)) {
     const error = payload?.error;
-    throw new ApiClientError(res.status, error?.code ?? "INTERNAL", error?.message ?? "Something went wrong", error?.fields);
+    throw new ApiClientError(
+      res.status,
+      error?.code ?? "INTERNAL",
+      error?.message ?? "Something went wrong",
+      error?.fields,
+      error?.details,
+    );
   }
   return payload?.data as T;
 }
