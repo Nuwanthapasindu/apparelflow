@@ -4,7 +4,7 @@
 
 A cutting-floor terminal for ApparelFlow ERP. A Cutting Supervisor creates a cutting order, a Cutting Verifier counts every component and signs it off, and only then can the batch reach the Sewing Supervisor's queue. The hard stop (no RED, missing or uncounted component can be approved) is enforced in the API **and** in PostgreSQL by triggers, not only in the UI. Built with Next.js 16 (App Router, Cache Components), React 19, TypeScript, Prisma 6, PostgreSQL on Supabase (used as plain Postgres), Zod, `jose`, Argon2id, Tailwind v4 and Vitest.
 
-**Live URL:** [USER TO CONFIRM: add the Vercel URL after deploying]
+**Live URL:** https://apparelflow-beryl.vercel.app/
 
 ## Evaluator quick path
 
