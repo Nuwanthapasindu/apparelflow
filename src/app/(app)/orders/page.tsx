@@ -11,11 +11,12 @@ import { parseListOrdersQuery } from "@/lib/validation/order-query";
 
 export default function OrdersPage({ searchParams }: PageProps<"/orders">) {
   return (
-    <RoleGate path="/orders" roles={["cutting_supervisor"]} area="Cutting Orders">
-      <Suspense fallback={<p className="p-4 font-medium text-slate-900" role="status">Loading orders...</p>}>
+    // RoleGate reads the session cookie, so it must sit inside the boundary (see verify/page.tsx).
+    <Suspense fallback={<p className="p-4 font-medium text-slate-900" role="status">Loading orders...</p>}>
+      <RoleGate path="/orders" roles={["cutting_supervisor"]} area="Cutting Orders">
         <OrdersContent searchParams={searchParams} />
-      </Suspense>
-    </RoleGate>
+      </RoleGate>
+    </Suspense>
   );
 }
 

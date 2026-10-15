@@ -6,11 +6,13 @@ import { listOrders } from "@/lib/services/orders";
 
 export default function Page({ searchParams }: PageProps<"/verify">) {
   return (
-    <RoleGate path="/verify" roles={["cutting_verifier"]} area="the Verifier Terminal">
-      <Suspense fallback={<p className="card p-5 font-semibold text-slate-900" role="status">Loading verification queue...</p>}>
+    // RoleGate reads the session cookie, so it must sit inside the boundary: outside it, navigating
+    // here would block on the server (Next's instant-navigation validation flags exactly that).
+    <Suspense fallback={<p className="card p-5 font-semibold text-slate-900" role="status">Loading verification queue...</p>}>
+      <RoleGate path="/verify" roles={["cutting_verifier"]} area="the Verifier Terminal">
         <QueueContent searchParams={searchParams} />
-      </Suspense>
-    </RoleGate>
+      </RoleGate>
+    </Suspense>
   );
 }
 
