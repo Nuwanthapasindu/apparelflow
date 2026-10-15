@@ -6,6 +6,15 @@ A cutting-floor terminal for ApparelFlow ERP. A Cutting Supervisor creates a cut
 
 **Live URL:** [https://peaceful-bavarois-ee17c0.netlify.app/](https://peaceful-bavarois-ee17c0.netlify.app/)
 
+**Run the tests** (needs Docker for the throwaway Postgres; it never touches the real database):
+
+```bash
+cp .env.test.example .env.test && yarn test:db:up && yarn test:db:migrate
+yarn test
+```
+
+If `.env.test` is missing or the database is not running, `yarn test` stops at once and prints these same commands. The CI badge above shows the latest run on `main`.
+
 ## Evaluator quick path
 
 Demo mode shows a **Role Switcher** (a dropdown in the header). It signs out and signs in again through the real login endpoint, so the server-side session genuinely changes; it never flips client state.
@@ -71,7 +80,7 @@ erDiagram
 |---|---|
 | `users` | Three roles (`cutting_supervisor`, `cutting_verifier`, `sewing_supervisor`), Argon2id hash, `is_active`. |
 | `refresh_tokens` | Hashed rotating refresh tokens grouped by `family_id`, with `used_at` and `revoked_at` for reuse detection. |
-| `recipes`, `recipe_components` | Seeded and read-only (no endpoint or screen edits them). Standard fabric yards, wastage cap, pieces per garment. |
+| `recipes`, `recipe_components` | Seeded and read-only (no endpoint or screen edits them). Standard fabric yards, wastage cap, pieces per garment. `recipe_components.image_url` is in the brief's schema and kept as a nullable column, but it is intentionally unused: no images are seeded and no screen shows one. |
 | `cutting_orders` | One row per batch: recipe, target quantity, fabric roll, fabric used, `status`, `current_attempt`, who started sewing and when. |
 | `verification_items` | One row per component and attempt. `component_name` and `expected_qty` are **snapshots** taken when the attempt starts; `actual_qty` and `status` stay `NULL` until counted. |
 | `verification_logs` | The decision per attempt (`APPROVED` or `REJECTED`, unique per order and attempt), the verifier, the server timestamp, the rejection note, and on approval the fabric snapshot (expected and actual yards, wastage %, cap, `over_cap`). **Append-only.** |
@@ -142,8 +151,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 
 ## Deployment and migrations
 
-- Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` in Vercel. Choose the Vercel region closest to the Supabase region.
-- Migrations are **not** run by the Vercel build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`). `postinstall` runs `prisma generate` so the git-ignored client exists on Vercel.
+- The live site runs on Netlify. Set `DATABASE_URL` (Supabase transaction pooler, port 6543, `?pgbouncer=true`), `DIRECT_URL` (session pooler, port 5432), `JWT_SECRET` (32 or more random characters) and `NEXT_PUBLIC_DEMO_MODE=true` as site environment variables. **`NEXT_PUBLIC_DEMO_MODE` is read at build time**: after adding or changing it, redeploy with the build cache cleared, or the demo credentials and Role Switcher stay hidden. Choose the region closest to the Supabase region.
+- Migrations are **not** run by the host build. Apply them by hand from a developer machine before deploying: `yarn prisma migrate deploy` (it uses `DIRECT_URL`), then `yarn prisma migrate status` should report the database is up to date. `postinstall` runs `prisma generate` so the git-ignored client exists on the host.
 - Next's file tracing includes the Linux Prisma engine in every server route (`outputFileTracingIncludes`), and `src/lib/db.ts` copies it to `/tmp/prisma-engines` on a cold start, because the bundler rewrites the generated client's directory to a path that does not exist in a serverless function. The generator lists `rhel-openssl-3.0.x` in `binaryTargets`.
 - A free-tier Supabase project can pause when inactive: open its dashboard before using the live demo.
 - Orders created while testing stay in the database; remove them in the Supabase SQL editor if you want a clean board.
@@ -156,7 +165,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs lint, the Prisma schema check, 
 - **400 versus 422.** Malformed or invalid input (a blank note, a decimal count) is 400; a well-formed approval that breaks a business rule (a shortage) is 422.
 - **Resubmit on the same order.** A rejected order goes back to the supervisor and is resubmitted as the same order with the next attempt number; each attempt keeps its own item rows and decision.
 - **Fabric is not updated on resubmit.** Resubmit creates a new count attempt but accepts no new fabric figure, so extra fabric used by a re-cut is not tracked in this version.
-- **`CUTTING_IN_PROGRESS` is unused.** It exists only to match the brief's diagram; there is no draft state.
+- **`CUTTING_IN_PROGRESS` is unused, and progress is the order status.** It exists only to match the brief's diagram; there is no draft state. The supervisor "tracks cutting progress" on the orders list and the order page through the status (`PENDING_VERIFICATION`, `REJECTED`, `VERIFIED`, `IN_SEWING`), the attempt number, the full attempt history and, after a rejection, the verifier's note.
 - **"Verifier audit notes" means the audit trail block.** The sewing detail shows who approved, when, the counts, variances, wastage and the over-cap flag. The schema has no free-text approval remark, and none was added.
 - **404 for out-of-scope orders.** The sewing role gets 404, not 403, for a pending, rejected or unknown order, and a verifier gets 404 for a non-pending order, so existence is not revealed. A wrong role is always 403 first.
 - **Sewing sees only the approved attempt.** After a re-cut, sewing sees attempt 2's counts and the attempt number, never the rejection note or the earlier attempt.

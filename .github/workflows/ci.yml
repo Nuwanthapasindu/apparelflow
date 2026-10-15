@@ -23,7 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
       DIRECT_URL: postgresql://postgres:test@localhost:5432/apparelflow_test
-      # Build-time placeholder (test value only, no real secret). The runtime secret lives in Vercel.
+      # Build-time placeholder (test value only, no real secret). The runtime secret lives in the host's environment variables.
       JWT_SECRET: ci-only-throwaway-secret-0123456789abcdef
 
     # Throwaway Postgres for the database trigger tests. Never Supabase.
