@@ -6,6 +6,15 @@ A cutting-floor terminal for ApparelFlow ERP. A Cutting Supervisor creates a cut
 
 **Live URL:** [https://peaceful-bavarois-ee17c0.netlify.app/](https://peaceful-bavarois-ee17c0.netlify.app/)
 
+**Run the tests** (needs Docker for the throwaway Postgres; it never touches the real database):
+
+```bash
+cp .env.test.example .env.test && yarn test:db:up && yarn test:db:migrate
+yarn test
+```
+
+If `.env.test` is missing or the database is not running, `yarn test` stops at once and prints these same commands. The CI badge above shows the latest run on `main`.
+
 ## Evaluator quick path
 
 Demo mode shows a **Role Switcher** (a dropdown in the header). It signs out and signs in again through the real login endpoint, so the server-side session genuinely changes; it never flips client state.
