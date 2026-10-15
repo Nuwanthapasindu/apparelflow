@@ -60,6 +60,9 @@ export async function getOrderDetailById(
   const row = await client.cuttingOrder.findFirst({
     where: { id, ...(options.pendingOnly ? { status: "PENDING_VERIFICATION" as const } : {}) },
     select: ORDER_DETAIL_SELECT,
+    // One SQL statement for the order and its relations. The default sends one per relation, and
+    // each is a network round trip.
+    relationLoadStrategy: "join",
   });
   return row ? toOrderDetail(row) : null;
 }
