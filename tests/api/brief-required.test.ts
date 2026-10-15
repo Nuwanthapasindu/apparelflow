@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
+import { listSewingQueue } from "@/lib/services/sewing-queue";
 import { prisma } from "../helpers/db";
+import { createOneOfEachStatus } from "../helpers/sewing";
 import {
   approveRequest,
   countsFor,
@@ -60,5 +62,16 @@ describe("brief-required verifier gatekeeper tests", () => {
       expect((await approveRequest(randomUUID(), userId)).status).toBe(403);
     }
     expect(await prisma.verificationLog.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  it("Test 5: unapproved orders never appear in the Sewing Queue database query", async () => {
+    const { pending, rejected, verified, inSewing } = await createOneOfEachStatus(ctx);
+    // The shipped query itself, called directly against the database (no endpoint, no session).
+    const queue = await listSewingQueue({ limit: 100 });
+    expect(queue.map((o) => o.id)).toEqual([verified.id]);
+    for (const absent of [pending.id, rejected.id, inSewing.id]) {
+      expect(queue.some((o) => o.id === absent)).toBe(false);
+    }
+    expect(await prisma.cuttingOrder.count()).toBe(4);
   });
 });
