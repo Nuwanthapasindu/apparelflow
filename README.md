@@ -15,7 +15,7 @@ Public demo logins with sample data only. Sign in on `/login`.
 - The login page is a single centered email and password form. With `NEXT_PUBLIC_DEMO_MODE=true` the header also shows a **Role Switcher**. The Role Switcher signs out and signs in again through the real login endpoint, so the server-side session really changes.
 - Without that flag there is no Role Switcher; sign out and sign in with another account instead.
 - The accounts are created by the seed (`yarn prisma db seed`). Re-running the seed resets their passwords to the values above.
-- Which pages exist per role today: Supervisor `/orders` (list, create, detail). Verifier `/verify` and Sewing `/sewing` are placeholders until the next milestone.
+- Which pages exist per role today: Supervisor `/orders` (list, create, rejection evidence, resubmit). Verifier `/verify` (queue, counting, approve/reject). Sewing `/sewing` remains a placeholder for the next milestone.
 
 ## Run locally
 
@@ -34,6 +34,7 @@ Interpretations of the brief:
 - **Fabric yards are decimals** (greater than 0, at most 2 decimal places). Piece counts and target quantities are integers only.
 - **`CUTTING_IN_PROGRESS` is unused.** It exists in the status enum to match the brief's diagram, but a new order starts as `PENDING_VERIFICATION`. There is no draft state.
 - **A batch is immutable once created.** Recipe, target quantity, fabric roll and order number never change (enforced by a database trigger). Fabric yards can be corrected only while the order is rejected and being re-cut.
+- **Resubmit keeps the original fabric figure.** The Day 3 resubmit action creates a new count attempt but does not accept or overwrite `actual_fabric_yds`, so additional fabric consumed by a re-cut is not tracked in this version.
 
 Known limitations of the authentication layer (accepted for this assessment):
 
