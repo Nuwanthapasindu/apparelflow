@@ -1,5 +1,6 @@
-import { assertTestDatabase } from "./helpers/assert-test-database";
+import { assertDatabaseReachable, assertTestDatabase } from "./helpers/assert-test-database";
 
-export default function setup() {
+export default async function setup() {
   assertTestDatabase();
+  await assertDatabaseReachable();
 }
