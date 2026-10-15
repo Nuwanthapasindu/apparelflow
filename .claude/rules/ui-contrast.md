@@ -26,8 +26,5 @@ Primary users are factory staff under time pressure, often on tablets or shared 
 ## Role-based visibility
 Verifier sees no create-order button. Sewing Supervisor never sees pending, unverified or rejected orders. Cutting Supervisor and Verifier never see the Sewing Queue. Hiding is for usability only; every rule is enforced on the server.
 
-## Role Switcher / demo panel
-A visible panel listing the three demo logins. Each button calls the real login endpoint (revoking the current session first) and reloads. It never changes a client-side role variable.
-
 ## Layout
 Responsive from tablet to desktop. Keep an established pattern once chosen (badges, tables, modals); call out inconsistency rather than introducing a new style.

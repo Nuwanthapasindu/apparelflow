@@ -26,7 +26,7 @@ Order of checks, always: **auth -> role -> validate body -> lock and check state
 `GET /api/sewing/queue` runs `WHERE status = 'VERIFIED'` and nothing else (no status query param). `GET /api/sewing/active` runs `WHERE status = 'IN_SEWING'`. Both sewing-supervisor only.
 
 ## Auth
-Custom JWT access token (15 min, httpOnly cookie, only `sub` and expiry) plus opaque rotating refresh token (SHA-256 hash stored, `family_id`, reuse detection revokes the whole family). Cookies: `httpOnly`, `Secure`, `SameSite`. Same generic message for wrong email and wrong password. The Role Switcher calls the real login endpoint with the seeded demo credentials after revoking the current refresh family; it never flips client state. Details: `docs/GAPS_AND_STARTUP_GUIDE.md` section 5.
+Custom JWT access token (15 min, httpOnly cookie, only `sub` and expiry) plus opaque rotating refresh token (SHA-256 hash stored, `family_id`, reuse detection revokes the whole family). Cookies: `httpOnly`, `Secure`, `SameSite`. Same generic message for wrong email and wrong password. There is no Role Switcher: changing role means signing out and signing in again, and client state never decides a role. Details: `docs/GAPS_AND_STARTUP_GUIDE.md` section 5.
 
 ## Responses
 Never return `password_hash` or token hashes. Shape error responses consistently (`{ error: { code, message, fields? } }`) so the UI can show inline errors.
