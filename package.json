@@ -10,7 +10,9 @@
     "build": "prisma generate && next build",
     "test": "dotenv -e .env.test -- vitest run",
     "test:watch": "dotenv -e .env.test -- vitest",
-    "db:migrate:test": "dotenv -e .env.test -- prisma migrate deploy"
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:db:down": "docker compose -f docker-compose.test.yml down",
+    "test:db:migrate": "dotenv -e .env.test -- prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "6",

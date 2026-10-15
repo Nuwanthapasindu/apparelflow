@@ -43,7 +43,8 @@ yarn lint                       # eslint (flat config: next core-web-vitals + ty
 yarn tsc --noEmit               # type-check (no script defined); run `yarn next typegen` first on a clean checkout
 yarn test                       # vitest against the LOCAL test Postgres (loads .env.test, aborts if the DB is not local and named *test*)
 yarn test tests/api/orders.test.ts   # one file (always go through `yarn test`, never bare `vitest`)
-yarn db:migrate:test            # apply migrations to the test database
+yarn test:db:up                 # start the throwaway Postgres 16 on port 5433 (docker-compose.test.yml)
+yarn test:db:migrate            # apply migrations to the test database (needs .env.test: cp .env.test.example .env.test)
 yarn prisma validate            # must pass before every push
 yarn prisma generate            # regenerate the client into src/generated/prisma
 yarn prisma migrate dev --name <change>
