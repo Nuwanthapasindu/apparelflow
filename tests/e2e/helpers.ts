@@ -17,10 +17,11 @@ export async function signInThroughForm(page: Page, role: Role) {
   await page.waitForURL(DEMO[role].home);
 }
 
-/** The Role Switcher signs out and signs in again through the real login endpoint. */
+/** Sign out, then sign in as another role through the real login form, the way an evaluator does. */
 export async function switchRole(page: Page, role: Role) {
-  await page.getByLabel("Switch role").selectOption({ label: DEMO[role].label });
-  await page.waitForURL(DEMO[role].home);
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.waitForURL(/\/login/);
+  await signInThroughForm(page, role);
 }
 
 /** An API client that is already signed in (own cookie jar), for building fixtures quickly. */

@@ -7,7 +7,7 @@ import { apiAs, countAndApprove, createOrderViaApi, type ApiOrder, type Role } f
 // the OS dark mode cannot turn text white on a white field).
 //
 // NOT AUTOMATED: the open popup of a native <select> (its <option> list) is drawn by the browser and can be
-// measured by neither axe nor the DOM. Check it by hand: Role Switcher, status filter, recipe select in the
+// measured by neither axe nor the DOM. Check it by hand: status filter, recipe select in the
 // order modal, in light and dark OS mode.
 
 const WIDTHS = [360, 768, 1280] as const;

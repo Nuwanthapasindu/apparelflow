@@ -1,9 +1,7 @@
 import { getSessionUser } from "@/lib/auth/server";
-import { getDemoPersonas } from "@/lib/demo";
 import { NAV } from "@/lib/nav";
 import { RoleBadge } from "./badges";
 import { NavLinks } from "./nav-links";
-import { RoleSwitcher } from "./role-switcher";
 import { SignOutButton } from "./sign-out-button";
 
 /**
@@ -14,7 +12,6 @@ import { SignOutButton } from "./sign-out-button";
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
   if (!user) return <>{children}</>;
-  const personas = getDemoPersonas();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -37,7 +34,6 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
               <span className="font-semibold text-slate-900">{user.fullName}</span>
               <RoleBadge role={user.role} />
             </div>
-            {personas.length > 0 && <RoleSwitcher personas={personas} currentEmail={user.email} />}
             <SignOutButton />
           </div>
         </div>
