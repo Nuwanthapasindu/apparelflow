@@ -204,7 +204,7 @@ function OrderForm({
           {created.recipe.name}, {created.targetQty} garments. A Cutting Verifier will count each component below.
         </p>
         <div className="mt-4 rounded-lg border border-slate-300 p-3">
-          <ExpectedCountsTable rows={created.items} />
+          <ExpectedCountsTable rows={created.attempts[0]?.items ?? []} />
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-3">
           <button type="button" className="btn btn-secondary" onClick={createAnother}>
